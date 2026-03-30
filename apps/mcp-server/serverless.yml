@@ -1,0 +1,40 @@
+# Serverless Framework config for MCP server → AWS Lambda.
+# Separate Lambda from backend — lighter weight (256MB), shorter timeout (15s).
+# MCP calls are stateless FHIR reads/writes, don't need full NestJS overhead.
+
+service: preop-intel-mcp
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  timeout: 15
+  environment:
+    NODE_ENV: production
+    FHIR_BASE_URL: ${ssm:/preop-intel/${self:provider.stage}/FHIR_BASE_URL}
+    FHIR_CLIENT_ID: ${ssm:/preop-intel/${self:provider.stage}/FHIR_CLIENT_ID}
+    FHIR_CLIENT_SECRET: ${ssm:/preop-intel/${self:provider.stage}/FHIR_CLIENT_SECRET}
+
+functions:
+  mcp:
+    handler: dist/index.handler
+    events:
+      - http:
+          method: ANY
+          path: /mcp/{proxy+}
+          cors: true
+      - http:
+          method: ANY
+          path: /mcp
+          cors: true
+
+plugins:
+  - serverless-plugin-optimize
+
+package:
+  individually: true
+  patterns:
+    - '!node_modules/**'
+    - '!src/**'

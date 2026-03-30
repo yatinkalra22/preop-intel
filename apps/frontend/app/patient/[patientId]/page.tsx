@@ -26,6 +26,15 @@ export default function PatientOverviewPage() {
       />
 
       <div className="mx-auto max-w-7xl px-6 py-8">
+        {/* Breadcrumb navigation */}
+        <nav className="mb-6 text-sm text-clinical-text-muted">
+          <button onClick={() => router.push('/dashboard')} className="hover:text-clinical-accent">
+            Dashboard
+          </button>
+          <span className="mx-2">/</span>
+          <span className="text-clinical-text-primary">{patient.name}</span>
+        </nav>
+
         {/* Action bar */}
         <div className="mb-8 flex items-center justify-between">
           <h2 className="text-xl font-bold text-clinical-text-primary">

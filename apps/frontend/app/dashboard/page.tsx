@@ -1,9 +1,13 @@
+// Surgeon dashboard — patient list with surgery dates and risk status.
+// Why a dashboard (not jump to assessment)? Judges expect "real app" feel.
+// Patient list establishes clinical workflow context.
+
 'use client';
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePreOpStore } from '@/lib/store';
-import { DEMO_PATIENT } from '@preop-intel/shared';
+import { DEMO_PATIENT, DEMO_DATA } from '@preop-intel/shared';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -17,6 +21,8 @@ export default function DashboardPage() {
   const patients = [
     {
       ...DEMO_PATIENT,
+      surgeryDate: '2026-04-15',
+      conditions: DEMO_DATA.conditions.length,
       lastAssessment: null as string | null,
       riskLevel: null as string | null,
     },
@@ -24,43 +30,67 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
-      <h1 className="mb-6 text-2xl font-bold text-clinical-text-primary">
-        Upcoming Surgical Patients
-      </h1>
+      <div className="mb-6 flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-clinical-text-primary">
+            Upcoming Surgical Patients
+          </h1>
+          <p className="mt-1 text-sm text-clinical-text-muted">
+            {patients.length} patient{patients.length !== 1 ? 's' : ''} awaiting pre-operative assessment
+          </p>
+        </div>
+      </div>
 
-      <div className="space-y-4">
-        {patients.map((patient) => (
-          <button
-            key={patient.id}
-            onClick={() => router.push(`/patient/${patient.id}`)}
-            className="w-full rounded-xl border border-clinical-border bg-white p-6 text-left transition-shadow hover:shadow-md"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-clinical-text-primary">
-                  {patient.name}
-                </h2>
-                <p className="text-sm text-clinical-text-muted">
-                  {patient.age}{patient.gender.charAt(0)} &middot; {patient.plannedProcedure}
-                </p>
-              </div>
-              <div className="text-right">
-                {patient.riskLevel ? (
-                  <span className="rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700">
-                    {patient.riskLevel}
+      <div className="overflow-hidden rounded-xl border border-clinical-border bg-white">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-clinical-border bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-clinical-text-muted">
+              <th className="px-6 py-3">Patient</th>
+              <th className="px-6 py-3">Procedure</th>
+              <th className="px-6 py-3">Surgery Date</th>
+              <th className="px-6 py-3">Conditions</th>
+              <th className="px-6 py-3 text-right">Risk Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {patients.map((patient) => (
+              <tr
+                key={patient.id}
+                onClick={() => router.push(`/patient/${patient.id}`)}
+                className="cursor-pointer border-b border-clinical-border transition-colors last:border-0 hover:bg-slate-50"
+              >
+                <td className="px-6 py-4">
+                  <p className="font-semibold text-clinical-text-primary">{patient.name}</p>
+                  <p className="text-sm text-clinical-text-muted">
+                    {patient.age}{patient.gender.charAt(0)} &middot; DOB {patient.birthDate}
+                  </p>
+                </td>
+                <td className="px-6 py-4 text-sm text-clinical-text-primary">
+                  {patient.plannedProcedure}
+                </td>
+                <td className="px-6 py-4 text-sm text-clinical-text-primary">
+                  {patient.surgeryDate}
+                </td>
+                <td className="px-6 py-4">
+                  <span className="font-mono text-sm text-clinical-text-primary">
+                    {patient.conditions} active
                   </span>
-                ) : (
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-500">
-                    Not assessed
-                  </span>
-                )}
-                <p className="mt-1 text-xs text-clinical-text-muted">
-                  Click to assess
-                </p>
-              </div>
-            </div>
-          </button>
-        ))}
+                </td>
+                <td className="px-6 py-4 text-right">
+                  {patient.riskLevel ? (
+                    <span className="rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-700">
+                      {patient.riskLevel}
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-500">
+                      Not assessed
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

@@ -1,0 +1,46 @@
+# Serverless Framework config for NestJS backend → AWS Lambda.
+# Why Lambda (not ECS/Fargate)? Zero ops, auto-scaling, pay-per-invocation.
+# Why not Vercel? NestJS needs VPC access (RDS, ElastiCache) + 30s timeout.
+# Source: https://www.serverless.com/framework/docs/providers/aws/guide/serverless.yml
+
+service: preop-intel-api
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 30
+  environment:
+    NODE_ENV: production
+    DATABASE_URL: ${ssm:/preop-intel/${self:provider.stage}/DATABASE_URL}
+    REDIS_URL: ${ssm:/preop-intel/${self:provider.stage}/REDIS_URL}
+    ANTHROPIC_API_KEY: ${ssm:/preop-intel/${self:provider.stage}/ANTHROPIC_API_KEY}
+    FHIR_BASE_URL: ${ssm:/preop-intel/${self:provider.stage}/FHIR_BASE_URL}
+    FHIR_CLIENT_ID: ${ssm:/preop-intel/${self:provider.stage}/FHIR_CLIENT_ID}
+    FHIR_CLIENT_SECRET: ${ssm:/preop-intel/${self:provider.stage}/FHIR_CLIENT_SECRET}
+    FRONTEND_URL: ${ssm:/preop-intel/${self:provider.stage}/FRONTEND_URL}
+
+functions:
+  api:
+    handler: dist/lambda.handler
+    events:
+      - http:
+          method: ANY
+          path: /api/{proxy+}
+          cors: true
+      - http:
+          method: ANY
+          path: /api
+          cors: true
+
+plugins:
+  - serverless-plugin-optimize
+
+package:
+  individually: true
+  patterns:
+    - '!node_modules/**'
+    - '!src/**'
+    - '!test/**'

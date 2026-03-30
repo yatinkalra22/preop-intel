@@ -8,16 +8,16 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { DEMO_PATIENT, DEMO_DATA, DEMO_FHIR_RESOURCES } from '@preop-intel/shared';
 import type { AgentName, AgentStatus } from '@preop-intel/shared';
 import { PatientBanner } from '@/components/layout/PatientBanner';
 import { AgentStatusPanel } from '@/components/agents/AgentStatusPanel';
 import { RiskGauge } from '@/components/risk/RiskGauge';
 import { RiskBanner } from '@/components/risk/RiskBanner';
+import { MetabolicCards } from '@/components/risk/MetabolicCards';
 import { RecommendationsTable } from '@/components/risk/RecommendationsTable';
 import { FhirResourceViewer } from '@/components/fhir/FhirResourceViewer';
-import { usePreOpStore } from '@/lib/store';
 
 interface AgentState {
   name: AgentName;
@@ -47,6 +47,7 @@ const DEMO_TIMELINE = [
 
 export default function AssessmentPage() {
   const { patientId } = useParams<{ patientId: string }>();
+  const router = useRouter();
   const patient = DEMO_PATIENT;
   const result = DEMO_DATA.assessmentResult;
 
@@ -56,16 +57,13 @@ export default function AssessmentPage() {
   const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
 
   const startDemo = useCallback(() => {
-    // Reset state
     setAgents(INITIAL_AGENTS);
     setPhase('running');
     setShowResults(false);
 
-    // Clear any existing timeouts
     timeoutsRef.current.forEach(clearTimeout);
     timeoutsRef.current = [];
 
-    // Schedule demo timeline
     for (const step of DEMO_TIMELINE) {
       const t = setTimeout(() => {
         setAgents((prev) =>
@@ -79,7 +77,6 @@ export default function AssessmentPage() {
       timeoutsRef.current.push(t);
     }
 
-    // Show results after pipeline completes
     const t = setTimeout(() => {
       setPhase('complete');
       setShowResults(true);
@@ -106,27 +103,44 @@ export default function AssessmentPage() {
       />
 
       <div className="mx-auto max-w-7xl px-6 py-8">
+        {/* Breadcrumb navigation */}
+        <nav className="mb-6 text-sm text-clinical-text-muted">
+          <button onClick={() => router.push('/dashboard')} className="hover:text-clinical-accent">
+            Dashboard
+          </button>
+          <span className="mx-2">/</span>
+          <button onClick={() => router.push(`/patient/${patientId}`)} className="hover:text-clinical-accent">
+            {patient.name}
+          </button>
+          <span className="mx-2">/</span>
+          <span className="text-clinical-text-primary">Risk Assessment</span>
+        </nav>
+
         {/* Start button */}
         {phase === 'idle' && (
-          <div className="mb-8 flex justify-center">
+          <div className="mb-8 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-clinical-border bg-white py-16">
+            <h2 className="mb-2 text-xl font-bold text-clinical-text-primary">
+              PreOp Risk Assessment
+            </h2>
+            <p className="mb-6 max-w-md text-center text-sm text-clinical-text-muted">
+              Multi-agent AI analysis using RCRI, ARISCAT, and metabolic risk scoring.
+              Results are written as FHIR R4 resources to the patient chart.
+            </p>
             <button
               onClick={startDemo}
               className="rounded-xl bg-clinical-accent px-10 py-4 text-lg font-bold text-white shadow-lg transition-all hover:bg-clinical-accent-dark hover:shadow-xl"
             >
-              Start PreOp Risk Assessment
+              Start Assessment
             </button>
           </div>
         )}
 
         {/* Agent panel + Gauges row */}
         {phase !== 'idle' && (
-          <div className="mb-8 grid gap-6 lg:grid-cols-3">
-            {/* Agent panel takes 1 column */}
+          <div className="mb-6 grid gap-6 lg:grid-cols-3">
             <div className="lg:col-span-1">
               <AgentStatusPanel agents={agents} />
             </div>
-
-            {/* Risk gauges take 2 columns */}
             <div className="grid gap-6 sm:grid-cols-2 lg:col-span-2">
               <RiskGauge
                 label="Cardiac Risk (RCRI)"
@@ -148,7 +162,7 @@ export default function AssessmentPage() {
           </div>
         )}
 
-        {/* Results section — appears after assessment completes */}
+        {/* Results section */}
         {showResults && (
           <div className="space-y-6">
             <RiskBanner
@@ -160,12 +174,20 @@ export default function AssessmentPage() {
               urgentConcerns={result.urgentConcerns}
             />
 
+            {/* Metabolic indicators */}
+            <MetabolicCards
+              hba1c={DEMO_DATA.metabolic.hba1c}
+              egfr={DEMO_DATA.metabolic.egfr}
+              bmi={DEMO_DATA.metabolic.bmi}
+              creatinine={DEMO_DATA.metabolic.creatinine}
+            />
+
             <RecommendationsTable recommendations={result.recommendations} />
 
             <FhirResourceViewer resources={fhirResources} />
 
             {/* Re-run button */}
-            <div className="flex justify-center pt-4">
+            <div className="flex justify-center pt-4 pb-8">
               <button
                 onClick={startDemo}
                 className="rounded-lg border border-clinical-border px-6 py-2 text-sm font-medium text-clinical-text-muted transition-colors hover:bg-slate-50"
