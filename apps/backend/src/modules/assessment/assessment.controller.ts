@@ -1,16 +1,32 @@
-import { Controller, Post, Get, Param, Body, Sse } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, Sse, Inject, forwardRef } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { AssessmentService } from './assessment.service';
+import { AgentsService } from '../agents/agents.service';
 import type { StartAssessmentRequest } from '@preop-intel/shared';
 
 @Controller('assessments')
 export class AssessmentController {
-  constructor(private readonly assessmentService: AssessmentService) {}
+  constructor(
+    private readonly assessmentService: AssessmentService,
+    @Inject(forwardRef(() => AgentsService))
+    private readonly agentsService: AgentsService,
+  ) {}
 
-  /** Start a new risk assessment for a patient */
+  /** Start a new risk assessment — creates session then runs agent pipeline */
   @Post('start')
   async startAssessment(@Body() body: StartAssessmentRequest) {
-    return this.assessmentService.startAssessment(body);
+    const { id } = await this.assessmentService.startAssessment(body);
+
+    // Run agent pipeline asynchronously — results stream via SSE
+    // Don't await — return ID immediately so frontend can connect to SSE
+    this.agentsService.runAssessment({
+      assessmentId: id,
+      ...body,
+    }).catch(err => {
+      this.assessmentService.updateSession(id, { status: 'failed' });
+    });
+
+    return { id };
   }
 
   /** Get assessment result by ID */

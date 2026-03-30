@@ -56,3 +56,6 @@ export {
   SNOMED_RISK_ASSESSMENT,
   ICD10_RESPIRATORY_INFECTION,
 } from './constants/risk.constants.js';
+
+// Mock / Demo data
+export { DEMO_DATA, DEMO_PATIENT } from './mock/demo-data.js';

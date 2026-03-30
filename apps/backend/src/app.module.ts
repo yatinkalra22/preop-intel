@@ -5,6 +5,8 @@ import { RiskModule } from './modules/risk/risk.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { AssessmentModule } from './modules/assessment/assessment.module';
 import { DatabaseModule } from './modules/database/database.module';
+import { AiModule } from './modules/ai/ai.module';
+import { AgentsModule } from './modules/agents/agents.module';
 import { HealthController } from './modules/health/health.controller';
 
 @Module({
@@ -18,7 +20,8 @@ import { HealthController } from './modules/health/health.controller';
     FhirModule,
     RiskModule,
     AssessmentModule,
-    // AI and Agents modules will be added in Phase 7
+    AiModule,
+    AgentsModule,
   ],
   controllers: [HealthController],
 })
