@@ -1,0 +1,12 @@
+{
+  "name": "@preop-intel/frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'frontend placeholder — run Phase 8 setup first'",
+    "build": "echo 'frontend placeholder'"
+  },
+  "dependencies": {
+    "@preop-intel/shared": "*"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@preop-intel/backend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'backend placeholder — run Phase 6 setup first'",
+    "build": "echo 'backend placeholder'"
+  },
+  "dependencies": {
+    "@preop-intel/shared": "*"
+  }
+}

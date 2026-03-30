@@ -1,0 +1,12 @@
+{
+  "name": "@preop-intel/mcp-server",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'mcp-server placeholder — run Phase 3 setup first'",
+    "build": "echo 'mcp-server placeholder'"
+  },
+  "dependencies": {
+    "@preop-intel/shared": "*"
+  }
+}
