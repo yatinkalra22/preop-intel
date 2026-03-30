@@ -20,6 +20,7 @@ import { registerPulmonaryTool } from './tools/pulmonary.tool.js';
 import { registerMetabolicTool } from './tools/metabolic.tool.js';
 import { registerMedicationTool } from './tools/medication.tool.js';
 import { registerCalculatorTools } from './tools/calculators.tool.js';
+import { registerWriteTools } from './tools/write.tools.js';
 
 const app = express();
 app.use(express.json());
@@ -39,7 +40,8 @@ registerMedicationTool(server);
 
 // Phase 4: Calculator tools (2)
 registerCalculatorTools(server);
-// Phase 5: Write tools will be added here
+// Phase 5: Write tools (4)
+registerWriteTools(server);
 
 // ─── SSE Transport ───────────────────────────────────────────────────────────
 // Each SSE connection gets its own transport instance.
@@ -62,7 +64,7 @@ app.post('/messages', async (req, res) => {
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', server: 'preop-intel-mcp', tools: 7 });
+  res.json({ status: 'ok', server: 'preop-intel-mcp', tools: 11 });
 });
 
 // ─── Start ───────────────────────────────────────────────────────────────────
