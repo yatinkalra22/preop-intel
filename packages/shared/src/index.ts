@@ -59,3 +59,4 @@ export {
 
 // Mock / Demo data
 export { DEMO_DATA, DEMO_PATIENT } from './mock/demo-data.js';
+export { DEMO_FHIR_RESOURCES } from './mock/demo-fhir-resources.js';
