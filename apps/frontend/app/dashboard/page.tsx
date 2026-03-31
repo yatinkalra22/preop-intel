@@ -9,11 +9,13 @@ import { useRouter } from 'next/navigation';
 import { usePreOpStore } from '@/lib/store';
 import { DEMO_PATIENT, DEMO_DATA } from '@preop-intel/shared';
 import { JourneyStepper } from '@/components/layout/JourneyStepper';
+import { maskDate, maskName } from '@/lib/privacy';
 
 export default function DashboardPage() {
   const router = useRouter();
   const isDemoMode = usePreOpStore((s) => s.isDemoMode);
   const enableDemoMode = usePreOpStore((s) => s.enableDemoMode);
+  const privacyMode = usePreOpStore((s) => s.privacyMode);
 
   useEffect(() => {
     if (!isDemoMode) enableDemoMode();
@@ -60,7 +62,25 @@ export default function DashboardPage() {
         </button>
       </section>
 
-      <div className="glass-panel overflow-hidden rounded-2xl border border-clinical-border shadow-sm">
+      <div className="space-y-3 md:hidden">
+        {patients.map((patient) => (
+          <button
+            key={`mobile-${patient.id}`}
+            onClick={() => router.push(`/patient/${patient.id}`)}
+            className="glass-panel w-full rounded-xl border border-clinical-border p-4 text-left"
+          >
+            <p className="text-sm font-semibold text-clinical-text-primary">
+              {privacyMode ? maskName(patient.name) : patient.name}
+            </p>
+            <p className="mt-1 text-xs text-clinical-text-muted">{patient.plannedProcedure}</p>
+            <p className="mt-1 text-xs text-clinical-text-muted">
+              DOB {privacyMode ? maskDate(patient.birthDate) : patient.birthDate} &middot; Surgery {patient.surgeryDate}
+            </p>
+          </button>
+        ))}
+      </div>
+
+      <div className="glass-panel hidden overflow-hidden rounded-2xl border border-clinical-border shadow-sm md:block">
         <table className="w-full">
           <thead>
             <tr className="border-b border-clinical-border bg-slate-50/90 text-left text-xs font-semibold uppercase tracking-wide text-clinical-text-muted">
@@ -79,9 +99,11 @@ export default function DashboardPage() {
                 className="stagger-in cursor-pointer border-b border-clinical-border transition-all last:border-0 hover:bg-cyan-50/40"
               >
                 <td className="px-6 py-4">
-                  <p className="font-semibold text-clinical-text-primary">{patient.name}</p>
+                  <p className="font-semibold text-clinical-text-primary">
+                    {privacyMode ? maskName(patient.name) : patient.name}
+                  </p>
                   <p className="text-sm text-clinical-text-muted">
-                    {patient.age}{patient.gender.charAt(0)} &middot; DOB {patient.birthDate}
+                    {patient.age}{patient.gender.charAt(0)} &middot; DOB {privacyMode ? maskDate(patient.birthDate) : patient.birthDate}
                   </p>
                 </td>
                 <td className="px-6 py-4 text-sm text-clinical-text-primary">

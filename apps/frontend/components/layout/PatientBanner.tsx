@@ -12,20 +12,29 @@ interface PatientBannerProps {
   patientId: string;
 }
 
+import { usePreOpStore } from '@/lib/store';
+import { maskDate, maskId, maskName } from '@/lib/privacy';
+
 export function PatientBanner({ name, age, gender, birthDate, plannedProcedure, patientId }: PatientBannerProps) {
+  const privacyMode = usePreOpStore((s) => s.privacyMode);
+
+  const displayName = privacyMode ? maskName(name) : name;
+  const displayBirthDate = privacyMode ? maskDate(birthDate) : birthDate;
+  const displayPatientId = privacyMode ? maskId(patientId) : patientId;
+
   return (
-    <div className="sticky top-14 z-40 border-b border-clinical-border bg-white px-6 py-3">
+    <div className="sticky top-14 z-40 border-b border-clinical-border bg-white px-4 py-3 sm:px-6">
       <div className="mx-auto max-w-7xl">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-lg font-semibold text-clinical-text-primary">
-              {name}
+              {displayName}
             </h1>
             <p className="text-sm text-clinical-text-muted">
-              {age}{gender.charAt(0).toUpperCase()} &middot; DOB: {birthDate} &middot; ID: {patientId}
+              {age}{gender.charAt(0).toUpperCase()} &middot; DOB: {displayBirthDate} &middot; ID: {displayPatientId}
             </p>
           </div>
-          <div className="text-right">
+          <div className="sm:text-right">
             <p className="text-sm font-medium text-clinical-text-primary">
               Planned Procedure
             </p>

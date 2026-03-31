@@ -21,7 +21,7 @@ export function FhirResourceViewer({ resources }: FhirResourceViewerProps) {
 
   return (
     <div className="rounded-xl border border-clinical-border bg-white p-6">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-clinical-text-muted">
           FHIR Resources Written to Chart
         </h3>
@@ -41,12 +41,12 @@ export function FhirResourceViewer({ resources }: FhirResourceViewerProps) {
               onClick={() => setExpanded(expanded === r.resourceType ? null : r.resourceType)}
               className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-slate-50"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <span className="rounded bg-clinical-accent/10 px-2 py-0.5 font-mono text-xs font-semibold text-clinical-accent">
                   {r.resourceType}
                 </span>
-                <span className="text-sm text-clinical-text-primary">{r.label}</span>
-                <span className="rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600">
+                <span className="truncate text-sm text-clinical-text-primary">{r.label}</span>
+                <span className="break-all rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-600">
                   id {(r.resource as any).id ?? 'generated'}
                 </span>
               </div>

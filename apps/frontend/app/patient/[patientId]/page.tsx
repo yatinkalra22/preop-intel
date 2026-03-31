@@ -8,12 +8,15 @@ import { useParams, useRouter } from 'next/navigation';
 import { DEMO_PATIENT, DEMO_DATA } from '@preop-intel/shared';
 import { PatientBanner } from '@/components/layout/PatientBanner';
 import { JourneyStepper } from '@/components/layout/JourneyStepper';
+import { usePreOpStore } from '@/lib/store';
+import { maskDate, maskName } from '@/lib/privacy';
 
 export default function PatientOverviewPage() {
   const { patientId } = useParams<{ patientId: string }>();
   const router = useRouter();
   const patient = DEMO_PATIENT;
   const data = DEMO_DATA;
+  const privacyMode = usePreOpStore((s) => s.privacyMode);
 
   return (
     <div>
@@ -35,7 +38,7 @@ export default function PatientOverviewPage() {
             Dashboard
           </button>
           <span className="mx-2">/</span>
-          <span className="text-clinical-text-primary">{patient.name}</span>
+          <span className="text-clinical-text-primary">{privacyMode ? maskName(patient.name) : patient.name}</span>
         </nav>
 
         {/* Action bar */}
@@ -100,7 +103,8 @@ export default function PatientOverviewPage() {
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-clinical-text-muted">
               Recent Lab Results
             </h3>
-            <table className="w-full">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[320px]">
               <thead>
                 <tr className="border-b border-clinical-border text-left text-xs font-medium uppercase text-clinical-text-muted">
                   <th className="pb-2">Test</th>
@@ -126,12 +130,13 @@ export default function PatientOverviewPage() {
                       </span>
                     </td>
                     <td className="py-2 text-right text-clinical-text-muted">
-                      {lab.date}
+                      {privacyMode ? maskDate(lab.date) : lab.date}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           </section>
 
           {/* Allergies */}

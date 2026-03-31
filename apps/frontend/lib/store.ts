@@ -19,11 +19,15 @@ interface PreOpStore {
   // Demo mode
   isDemoMode: boolean;
 
+  // Privacy mode
+  privacyMode: boolean;
+
   // Actions
   setFhirContext: (token: string, baseUrl: string, patientId: string) => void;
   setAssessmentId: (id: string) => void;
   setAssessmentResult: (result: AssessmentResult) => void;
   enableDemoMode: () => void;
+  togglePrivacyMode: () => void;
   reset: () => void;
 }
 
@@ -34,6 +38,7 @@ export const usePreOpStore = create<PreOpStore>((set) => ({
   currentAssessmentId: null,
   assessmentResult: null,
   isDemoMode: false,
+  privacyMode: true,
 
   setFhirContext: (token, baseUrl, patientId) =>
     set({ fhirToken: token, fhirBaseUrl: baseUrl, patientId }),
@@ -52,6 +57,9 @@ export const usePreOpStore = create<PreOpStore>((set) => ({
       fhirToken: 'demo-token',
     }),
 
+  togglePrivacyMode: () =>
+    set((state) => ({ privacyMode: !state.privacyMode })),
+
   reset: () =>
     set({
       fhirToken: null,
@@ -60,5 +68,6 @@ export const usePreOpStore = create<PreOpStore>((set) => ({
       currentAssessmentId: null,
       assessmentResult: null,
       isDemoMode: false,
+      privacyMode: true,
     }),
 }));
