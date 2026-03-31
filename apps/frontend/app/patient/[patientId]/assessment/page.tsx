@@ -21,6 +21,7 @@ import { FhirResourceViewer } from '@/components/fhir/FhirResourceViewer';
 import { OptimizationSimulator } from '@/components/risk/OptimizationSimulator';
 import { SafetyGuardrail } from '@/components/risk/SafetyGuardrail';
 import { ImpactSnapshot } from '@/components/risk/ImpactSnapshot';
+import { JudgingScorecard } from '@/components/risk/JudgingScorecard';
 import { api } from '@/lib/api';
 import { usePreOpStore } from '@/lib/store';
 
@@ -418,6 +419,13 @@ export default function AssessmentPage() {
               safeToProceed={currentResult.safeToProceed}
               optimizationRequired={currentResult.optimizationRequired}
               urgentConcerns={currentResult.urgentConcerns}
+            />
+
+            <JudgingScorecard
+              confidenceScore={confidenceScore}
+              recommendationsCount={currentResult.recommendations.length}
+              urgentConcernsCount={currentResult.urgentConcerns.length}
+              riskPercent={currentResult.overallRiskPercent}
             />
 
             <SafetyGuardrail
