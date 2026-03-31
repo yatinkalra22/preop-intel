@@ -18,6 +18,8 @@ import { RiskBanner } from '@/components/risk/RiskBanner';
 import { MetabolicCards } from '@/components/risk/MetabolicCards';
 import { RecommendationsTable } from '@/components/risk/RecommendationsTable';
 import { FhirResourceViewer } from '@/components/fhir/FhirResourceViewer';
+import { OptimizationSimulator } from '@/components/risk/OptimizationSimulator';
+import { SafetyGuardrail } from '@/components/risk/SafetyGuardrail';
 import { api } from '@/lib/api';
 import { usePreOpStore } from '@/lib/store';
 
@@ -100,6 +102,68 @@ export default function AssessmentPage() {
   const allComplete = useMemo(
     () => agents.every((a) => a.status === 'complete'),
     [agents],
+  );
+
+  const missingCriticalFields = useMemo(() => {
+    const missing: string[] = [];
+    if (currentResult.metabolicRisk.hba1c.value == null) missing.push('HbA1c');
+    if (currentResult.metabolicRisk.creatinine.value == null) missing.push('Creatinine');
+    if (currentResult.metabolicRisk.egfr.value == null) missing.push('eGFR');
+    if ((currentResult.medicationRisk.flags ?? []).length === 0) missing.push('Active medication review');
+    return missing;
+  }, [currentResult]);
+
+  const confidenceScore = useMemo(() => {
+    const penalties = missingCriticalFields.length * 12;
+    const base = 94;
+    return Math.max(35, base - penalties);
+  }, [missingCriticalFields.length]);
+
+  const shouldAbstain = confidenceScore < 65 || missingCriticalFields.includes('HbA1c');
+
+  const recommendationEvidence = useMemo(
+    () =>
+      currentResult.recommendations.map((rec) => {
+        const normalized = rec.action.toLowerCase();
+        if (normalized.includes('endocrin')) {
+          return {
+            chips: [
+              'Metabolic agent',
+              `HbA1c ${currentResult.metabolicRisk.hba1c.value ?? 'missing'}%`,
+              'Threshold < 8.5%',
+            ],
+            source: 'FHIR Observation + metabolic risk rules + orchestrator synthesis',
+          };
+        }
+
+        if (normalized.includes('cardio')) {
+          return {
+            chips: [
+              'Cardiac agent',
+              `RCRI ${currentResult.rcri.score}/6`,
+              `${currentResult.rcri.riskPercent}% MACE`,
+            ],
+            source: 'FHIR Condition/Observation + RCRI calculator + orchestrator synthesis',
+          };
+        }
+
+        if (normalized.includes('spirometry') || normalized.includes('pulmonary')) {
+          return {
+            chips: [
+              'Pulmonary agent',
+              `ARISCAT ${currentResult.ariscat.score}`,
+              `${currentResult.ariscat.ppcRisk} PPC`,
+            ],
+            source: 'FHIR Observation + ARISCAT calculator + orchestrator synthesis',
+          };
+        }
+
+        return {
+          chips: ['Orchestrator agent', 'Cross-domain synthesis'],
+          source: 'Multi-agent context + LLM clinical synthesis',
+        };
+      }),
+    [currentResult],
   );
 
   const cleanupRuntime = useCallback(() => {
@@ -355,6 +419,18 @@ export default function AssessmentPage() {
               urgentConcerns={currentResult.urgentConcerns}
             />
 
+            <SafetyGuardrail
+              confidenceScore={confidenceScore}
+              missingFields={missingCriticalFields}
+              abstain={shouldAbstain}
+            />
+
+            <OptimizationSimulator
+              baselineRiskPercent={currentResult.overallRiskPercent}
+              baselineHbA1c={currentResult.metabolicRisk.hba1c.value}
+              baselineCreatinine={currentResult.metabolicRisk.creatinine.value}
+            />
+
             {/* Metabolic indicators */}
             <MetabolicCards
               hba1c={currentResult.metabolicRisk?.hba1c ?? DEMO_DATA.metabolic.hba1c}
@@ -363,7 +439,10 @@ export default function AssessmentPage() {
               creatinine={currentResult.metabolicRisk?.creatinine ?? DEMO_DATA.metabolic.creatinine}
             />
 
-            <RecommendationsTable recommendations={currentResult.recommendations} />
+            <RecommendationsTable
+              recommendations={currentResult.recommendations}
+              evidence={recommendationEvidence}
+            />
 
             <FhirResourceViewer resources={fhirResources} />
 
