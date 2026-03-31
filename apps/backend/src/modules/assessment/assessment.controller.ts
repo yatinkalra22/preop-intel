@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Body, Sse, Inject, forwardRef } from '@nestjs/common';
+import { Controller, Post, Get, Param, Body, Sse, Inject, forwardRef, BadRequestException } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { AssessmentService } from './assessment.service';
 import { AgentsService } from '../agents/agents.service';
@@ -12,9 +12,33 @@ export class AssessmentController {
     private readonly agentsService: AgentsService,
   ) {}
 
+  private validateStartPayload(body: StartAssessmentRequest) {
+    if (!body?.patientId || body.patientId.length > 200) {
+      throw new BadRequestException('Invalid patientId');
+    }
+    if (!body?.plannedProcedure || body.plannedProcedure.length > 500) {
+      throw new BadRequestException('Invalid plannedProcedure');
+    }
+    if (!body?.accessToken || body.accessToken.length > 8000) {
+      throw new BadRequestException('Invalid accessToken');
+    }
+    if (body.fhirBaseUrl !== 'demo') {
+      let parsed: URL;
+      try {
+        parsed = new URL(body.fhirBaseUrl);
+      } catch {
+        throw new BadRequestException('Invalid fhirBaseUrl');
+      }
+      if (parsed.protocol !== 'https:' && parsed.hostname !== 'localhost') {
+        throw new BadRequestException('fhirBaseUrl must use HTTPS');
+      }
+    }
+  }
+
   /** Start a new risk assessment — creates session then runs agent pipeline */
   @Post('start')
   async startAssessment(@Body() body: StartAssessmentRequest) {
+    this.validateStartPayload(body);
     const { id } = await this.assessmentService.startAssessment(body);
 
     // Run agent pipeline asynchronously — results stream via SSE

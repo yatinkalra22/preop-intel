@@ -32,18 +32,29 @@ export class AuthController {
   async callback(
     @Query('code') code: string,
     @Query('state') state: string,
+    @Query('iss') iss: string,
     @Res() res: Response,
   ) {
     if (!code) {
       return res.status(HttpStatus.BAD_REQUEST).json({ error: 'Missing code' });
     }
 
-    // In a real implementation, validate state against stored value
     try {
-      const iss = ''; // Would be retrieved from session/state
-      const tokenData = await this.authService.exchangeCode(code, iss);
+      const issFromState = this.authService.resolveIssuerFromState(state);
+      const resolvedIssuer = issFromState ?? (iss ? this.authService.validateIssuer(iss) : null);
+
+      if (!resolvedIssuer) {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          error: 'Missing or invalid OAuth state/issuer',
+        });
+      }
+
+      const tokenData = await this.authService.exchangeCode(code, resolvedIssuer);
       return res.json(tokenData);
     } catch (error) {
+      if (error instanceof Error && /invalid|missing/i.test(error.message)) {
+        return res.status(HttpStatus.BAD_REQUEST).json({ error: error.message });
+      }
       return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         error: 'Token exchange failed',
       });

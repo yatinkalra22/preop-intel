@@ -7,22 +7,71 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+type LaunchState = {
+  iss: string;
+  createdAt: number;
+};
+
+const STATE_TTL_MS = 10 * 60 * 1000;
+
 @Injectable()
 export class AuthService {
+  private readonly launchStates = new Map<string, LaunchState>();
+
   constructor(private config: ConfigService) {}
+
+  private pruneExpiredStates() {
+    const now = Date.now();
+    for (const [state, value] of this.launchStates.entries()) {
+      if (now - value.createdAt > STATE_TTL_MS) {
+        this.launchStates.delete(state);
+      }
+    }
+  }
+
+  validateIssuer(iss: string): string {
+    if (!iss || iss.length > 2000) {
+      throw new Error('Invalid issuer');
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(iss);
+    } catch {
+      throw new Error('Issuer must be a valid URL');
+    }
+    if (parsed.protocol !== 'https:' && parsed.hostname !== 'localhost') {
+      throw new Error('Issuer must use HTTPS');
+    }
+    parsed.hash = '';
+    return parsed.toString().replace(/\/$/, '');
+  }
 
   /** Build the SMART authorize URL for EHR launch redirect */
   getAuthorizeUrl(iss: string, launch: string): string {
+    const safeIssuer = this.validateIssuer(iss);
+    this.pruneExpiredStates();
+    const state = crypto.randomUUID();
+    this.launchStates.set(state, { iss: safeIssuer, createdAt: Date.now() });
+
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: this.config.get('FHIR_CLIENT_ID', ''),
       redirect_uri: this.config.get('SMART_CALLBACK_URL', 'http://localhost:3001/api/auth/callback'),
       scope: 'launch openid profile patient/*.read patient/RiskAssessment.write patient/CarePlan.write patient/Goal.write patient/Flag.write patient/ServiceRequest.write',
-      state: crypto.randomUUID(),
-      aud: iss,
+      state,
+      aud: safeIssuer,
       launch,
     });
-    return `${iss}/auth/authorize?${params}`;
+    return `${safeIssuer}/auth/authorize?${params}`;
+  }
+
+  resolveIssuerFromState(state: string | undefined): string | null {
+    if (!state) return null;
+    this.pruneExpiredStates();
+    const match = this.launchStates.get(state);
+    if (!match) return null;
+    this.launchStates.delete(state);
+    return match.iss;
   }
 
   /** Exchange authorization code for access token */
@@ -31,7 +80,8 @@ export class AuthService {
     patientId: string;
     fhirBaseUrl: string;
   }> {
-    const tokenUrl = `${iss}/auth/token`;
+    const safeIssuer = this.validateIssuer(iss);
+    const tokenUrl = `${safeIssuer}/auth/token`;
     const res = await fetch(tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -44,11 +94,19 @@ export class AuthService {
       }),
     });
 
+    if (!res.ok) {
+      throw new Error(`Token endpoint returned ${res.status}`);
+    }
+
     const data = await res.json() as any;
+    if (!data?.access_token || !data?.patient) {
+      throw new Error('Token response missing required fields');
+    }
+
     return {
       accessToken: data.access_token,
       patientId: data.patient,
-      fhirBaseUrl: iss,
+      fhirBaseUrl: safeIssuer,
     };
   }
 
