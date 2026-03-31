@@ -18,6 +18,8 @@
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
     "ts-node": "^10.9.0",
+    "serverless": "^3.38.0",
+    "serverless-plugin-optimize": "^4.3.0",
     "typescript": "^5.3.0"
   }
 }

@@ -10,8 +10,12 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "deploy:backend": "cd apps/backend && serverless deploy",
-    "deploy:frontend": "cd apps/frontend && vercel --prod"
+    "deploy": "./scripts/deploy.sh",
+    "deploy:prod": "./scripts/deploy.sh prod",
+    "deploy:backend": "cd apps/backend && npx serverless deploy",
+    "deploy:mcp": "cd apps/mcp-server && npx serverless deploy",
+    "deploy:frontend": "cd apps/frontend && vercel --prod",
+    "setup:ssm": "./scripts/setup-ssm.sh"
   },
   "devDependencies": {
     "turbo": "^2.0.0",

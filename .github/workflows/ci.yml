@@ -1,0 +1,85 @@
+# CI pipeline — runs on every push and PR.
+# Why GitHub Actions (not CircleCI/Jenkins)? Zero config for GitHub repos,
+# free for public repos, native caching for npm/turbo.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      # Why cache turbo? Avoids rebuilding unchanged packages.
+      # Source: https://turbo.build/repo/docs/ci/github-actions
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: turbo-${{ runner.os }}-
+
+      - run: npm ci
+
+      - run: npx turbo run build
+        env:
+          TURBO_CACHE_DIR: .turbo
+
+  deploy-backend:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npx turbo run build --filter=@preop-intel/backend --filter=@preop-intel/shared
+
+      # Why serverless deploy here (not in a separate workflow)?
+      # Backend deploys are fast (<60s) and only happen on main push.
+      - run: cd apps/backend && npx serverless deploy --stage prod
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+
+  deploy-mcp:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npx turbo run build --filter=@preop-intel/mcp-server --filter=@preop-intel/shared
+
+      - run: cd apps/mcp-server && npx serverless deploy --stage prod
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
