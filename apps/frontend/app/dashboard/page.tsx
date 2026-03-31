@@ -29,22 +29,26 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8">
-      <div className="mb-6 flex items-end justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-clinical-text-primary">
-            Upcoming Surgical Patients
-          </h1>
-          <p className="mt-1 text-sm text-clinical-text-muted">
-            {patients.length} patient{patients.length !== 1 ? 's' : ''} awaiting pre-operative assessment
-          </p>
+    <div className="mx-auto max-w-7xl px-6 py-8 fade-rise">
+      <section className="glass-panel mb-6 overflow-hidden rounded-2xl border border-cyan-100 shadow-sm">
+        <div className="bg-gradient-to-r from-cyan-500 via-sky-500 to-teal-500 p-[1px]">
+          <div className="rounded-[15px] bg-white/95 px-6 py-6">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700">PreOp Intel Command Board</p>
+              <span className="rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold text-cyan-700">Live demo mode</span>
+            </div>
+            <h1 className="text-3xl font-bold text-clinical-text-primary">Upcoming Surgical Patients</h1>
+            <p className="mt-2 text-sm text-clinical-text-muted">
+              {patients.length} patient{patients.length !== 1 ? 's' : ''} awaiting pre-operative assessment
+            </p>
+          </div>
         </div>
-      </div>
+      </section>
 
-      <div className="overflow-hidden rounded-xl border border-clinical-border bg-white">
+      <div className="glass-panel overflow-hidden rounded-2xl border border-clinical-border shadow-sm">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-clinical-border bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-clinical-text-muted">
+            <tr className="border-b border-clinical-border bg-slate-50/90 text-left text-xs font-semibold uppercase tracking-wide text-clinical-text-muted">
               <th className="px-6 py-3">Patient</th>
               <th className="px-6 py-3">Procedure</th>
               <th className="px-6 py-3">Surgery Date</th>
@@ -57,7 +61,7 @@ export default function DashboardPage() {
               <tr
                 key={patient.id}
                 onClick={() => router.push(`/patient/${patient.id}`)}
-                className="cursor-pointer border-b border-clinical-border transition-colors last:border-0 hover:bg-slate-50"
+                className="stagger-in cursor-pointer border-b border-clinical-border transition-all last:border-0 hover:bg-cyan-50/40"
               >
                 <td className="px-6 py-4">
                   <p className="font-semibold text-clinical-text-primary">{patient.name}</p>
@@ -82,7 +86,7 @@ export default function DashboardPage() {
                       {patient.riskLevel}
                     </span>
                   ) : (
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-500">
+                    <span className="rounded-full bg-sky-100 px-3 py-1 text-sm font-medium text-sky-700">
                       Not assessed
                     </span>
                   )}

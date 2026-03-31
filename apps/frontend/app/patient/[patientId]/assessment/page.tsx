@@ -271,7 +271,7 @@ export default function AssessmentPage() {
         patientId={patientId}
       />
 
-      <div className="mx-auto max-w-7xl px-6 py-8">
+      <div className="mx-auto max-w-7xl px-6 py-8 fade-rise">
         {/* Breadcrumb navigation */}
         <nav className="mb-6 text-sm text-clinical-text-muted">
           <button onClick={() => router.push('/dashboard')} className="hover:text-clinical-accent">
@@ -287,7 +287,10 @@ export default function AssessmentPage() {
 
         {/* Start button */}
         {phase === 'idle' && (
-          <div className="mb-8 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-clinical-border bg-white py-16">
+          <div className="glass-panel mb-8 flex flex-col items-center justify-center rounded-2xl border border-cyan-100 py-16 shadow-sm">
+            <p className="mb-3 rounded-full bg-cyan-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cyan-700">
+              Multi-agent orchestration
+            </p>
             <h2 className="mb-2 text-xl font-bold text-clinical-text-primary">
               PreOp Risk Assessment
             </h2>
@@ -300,7 +303,7 @@ export default function AssessmentPage() {
             </p>
             <button
               onClick={startDemo}
-              className="rounded-xl bg-clinical-accent px-10 py-4 text-lg font-bold text-white shadow-lg transition-all hover:bg-clinical-accent-dark hover:shadow-xl"
+              className="rounded-xl bg-gradient-to-r from-cyan-500 to-sky-600 px-10 py-4 text-lg font-bold text-white shadow-lg transition-all hover:scale-[1.01] hover:shadow-xl"
             >
               Start Assessment
             </button>
@@ -315,7 +318,7 @@ export default function AssessmentPage() {
 
         {/* Agent panel + Gauges row */}
         {phase !== 'idle' && (
-          <div className="mb-6 grid gap-6 lg:grid-cols-3">
+          <div className="mb-6 grid gap-6 lg:grid-cols-3 stagger-in">
             <div className="lg:col-span-1">
               <AgentStatusPanel agents={agents} />
             </div>
@@ -342,7 +345,7 @@ export default function AssessmentPage() {
 
         {/* Results section */}
         {showResults && (
-          <div className="space-y-6">
+          <div className="space-y-6 fade-rise">
             <RiskBanner
               overallRisk={currentResult.overallRisk}
               overallRiskPercent={currentResult.overallRiskPercent}

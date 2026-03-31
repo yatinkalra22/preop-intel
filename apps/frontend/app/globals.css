@@ -4,5 +4,33 @@
 
 body {
   background-color: #F8FAFC;
+  background-image:
+    radial-gradient(circle at 12% 10%, rgba(14, 165, 233, 0.08), transparent 30%),
+    radial-gradient(circle at 85% 6%, rgba(16, 185, 129, 0.06), transparent 25%),
+    linear-gradient(180deg, rgba(248, 250, 252, 1) 0%, rgba(241, 245, 249, 0.65) 100%);
   color: #0F172A;
+}
+
+.glass-panel {
+  backdrop-filter: blur(6px);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.fade-rise {
+  animation: fade-rise 420ms ease-out;
+}
+
+.stagger-in {
+  animation: fade-rise 500ms ease-out;
+}
+
+@keyframes fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
