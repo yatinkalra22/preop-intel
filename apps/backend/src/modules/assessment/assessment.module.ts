@@ -4,6 +4,7 @@ import { AssessmentController } from './assessment.controller';
 import { AssessmentService } from './assessment.service';
 import { AssessmentSession } from './assessment.entity';
 import { AgentsModule } from '../agents/agents.module';
+import { AuditService } from '../security/audit.service';
 
 @Module({
   imports: [
@@ -11,7 +12,7 @@ import { AgentsModule } from '../agents/agents.module';
     forwardRef(() => AgentsModule),
   ],
   controllers: [AssessmentController],
-  providers: [AssessmentService],
+  providers: [AssessmentService, AuditService],
   exports: [AssessmentService],
 })
 export class AssessmentModule {}
