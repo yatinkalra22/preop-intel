@@ -20,6 +20,7 @@ import { RecommendationsTable } from '@/components/risk/RecommendationsTable';
 import { FhirResourceViewer } from '@/components/fhir/FhirResourceViewer';
 import { OptimizationSimulator } from '@/components/risk/OptimizationSimulator';
 import { SafetyGuardrail } from '@/components/risk/SafetyGuardrail';
+import { ImpactSnapshot } from '@/components/risk/ImpactSnapshot';
 import { api } from '@/lib/api';
 import { usePreOpStore } from '@/lib/store';
 
@@ -429,6 +430,12 @@ export default function AssessmentPage() {
               baselineRiskPercent={currentResult.overallRiskPercent}
               baselineHbA1c={currentResult.metabolicRisk.hba1c.value}
               baselineCreatinine={currentResult.metabolicRisk.creatinine.value}
+            />
+
+            <ImpactSnapshot
+              baselineRiskPercent={currentResult.overallRiskPercent}
+              recommendationsCount={currentResult.recommendations.length}
+              urgentConcernsCount={currentResult.urgentConcerns.length}
             />
 
             {/* Metabolic indicators */}
