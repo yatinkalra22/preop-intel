@@ -42,8 +42,8 @@ function PulsingDot({ status }: { status: AgentStatus }) {
 
 export function AgentStatusPanel({ agents }: AgentStatusPanelProps) {
   return (
-    <div className="rounded-xl border border-clinical-border bg-white p-6">
-      <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-clinical-text-muted">
+    <div className="rounded-xl border border-clinical-border bg-white p-5 sm:p-6">
+      <h3 className="mb-4 text-xs font-semibold uppercase tracking-[0.12em] text-clinical-text-muted sm:text-sm sm:tracking-wide">
         Agent Pipeline
       </h3>
       <div className="space-y-3">

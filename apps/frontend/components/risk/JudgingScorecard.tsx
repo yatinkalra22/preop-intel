@@ -42,9 +42,9 @@ export function JudgingScorecard({
   ];
 
   return (
-    <section className="glass-panel rounded-xl border border-clinical-border p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-clinical-text-muted">
+    <section className="glass-panel rounded-xl border border-clinical-border p-5 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-clinical-text-muted sm:text-sm sm:tracking-wide">
           Hackathon Judge Alignment
         </h3>
         <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-semibold text-sky-800">
@@ -52,9 +52,9 @@ export function JudgingScorecard({
         </span>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-3 sm:gap-4">
         {rows.map((row) => (
-          <div key={row.label} className="rounded-lg border border-slate-200 bg-white p-4">
+          <div key={row.label} className="rounded-lg border border-slate-200 bg-white p-4 sm:p-5">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wide text-clinical-text-muted">
                 {row.label}

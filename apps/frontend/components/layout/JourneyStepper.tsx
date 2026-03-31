@@ -17,15 +17,15 @@ const STEPS: StepItem[] = [
 
 export function JourneyStepper({ currentStep }: JourneyStepperProps) {
   return (
-    <div className="mb-6 rounded-xl border border-clinical-border bg-white p-4">
-      <div className="grid gap-3 md:grid-cols-3">
+    <div className="mb-6 rounded-xl border border-clinical-border bg-white p-4 sm:p-5">
+      <div className="grid gap-2.5 md:grid-cols-3 sm:gap-3">
         {STEPS.map((step, idx) => {
           const stepNo = idx + 1;
           const isCurrent = stepNo === currentStep;
           const isDone = stepNo < currentStep;
 
           return (
-            <div key={step.label} className="flex items-start gap-3 rounded-lg px-2 py-1">
+            <div key={step.label} className="flex items-start gap-3 rounded-lg px-2 py-1.5">
               <span
                 className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
                   isDone

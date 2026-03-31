@@ -26,14 +26,14 @@ export function RiskBanner({ overallRisk, overallRiskPercent, clinicalNarrative,
   const styles = getRiskStyles(overallRisk);
 
   return (
-    <div className={`rounded-xl border-2 ${styles.border} ${styles.bg} p-6`}>
-      <div className="flex items-start justify-between">
+    <div className={`rounded-xl border-2 ${styles.border} ${styles.bg} p-5 sm:p-6`}>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <span className={`rounded-full ${styles.badge} px-4 py-1.5 text-sm font-bold`}>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <span className={`rounded-full ${styles.badge} px-3 py-1 text-xs font-semibold uppercase tracking-wide sm:px-4 sm:py-1.5 sm:text-sm`}>
               {overallRisk} Risk
             </span>
-            <span className="font-mono text-lg font-bold text-clinical-text-primary">
+            <span className="font-mono text-base font-bold text-clinical-text-primary sm:text-lg">
               {overallRiskPercent}% MACE
             </span>
           </div>
@@ -43,7 +43,7 @@ export function RiskBanner({ overallRisk, overallRiskPercent, clinicalNarrative,
           </p>
 
           {urgentConcerns.length > 0 && (
-            <ul className="mt-3 space-y-1">
+            <ul className="mt-3 space-y-1.5">
               {urgentConcerns.map((concern, i) => (
                 <li key={i} className={`text-sm ${styles.text} flex items-start gap-2`}>
                   <span className="mt-0.5 text-xs">⚠</span>
@@ -54,14 +54,14 @@ export function RiskBanner({ overallRisk, overallRiskPercent, clinicalNarrative,
           )}
         </div>
 
-        <div className="ml-6 text-right">
+        <div className="sm:ml-6 sm:text-right">
           {safeToProceed ? (
             <div className="rounded-lg bg-green-100 px-4 py-2">
-              <p className="text-sm font-bold text-green-800">SAFE TO PROCEED</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-green-800 sm:text-sm">SAFE TO PROCEED</p>
             </div>
           ) : (
             <div className="rounded-lg bg-red-100 px-4 py-2">
-              <p className="text-sm font-bold text-red-800">OPTIMIZATION REQUIRED</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-red-800 sm:text-sm">OPTIMIZATION REQUIRED</p>
               {optimizationRequired && (
                 <p className="mt-1 text-xs text-red-600">Delay recommended</p>
               )}

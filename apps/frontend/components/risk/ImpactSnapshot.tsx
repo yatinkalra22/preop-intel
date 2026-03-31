@@ -15,9 +15,9 @@ export function ImpactSnapshot({
   const estimatedAvoidedCancellationRisk = Math.min(65, Math.round(baselineRiskPercent * 4.2));
 
   return (
-    <section className="glass-panel rounded-xl border border-clinical-border p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-clinical-text-muted">
+    <section className="glass-panel rounded-xl border border-clinical-border p-5 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-clinical-text-muted sm:text-sm sm:tracking-wide">
           Impact Snapshot
         </h3>
         <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
@@ -25,20 +25,20 @@ export function ImpactSnapshot({
         </span>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-4 sm:p-5">
           <p className="text-xs uppercase tracking-wide text-clinical-text-muted">Current MACE risk</p>
-          <p className="mt-1 font-mono text-2xl font-bold text-clinical-text-primary">{baselineRiskPercent.toFixed(1)}%</p>
+          <p className="mt-2 font-mono text-xl font-bold text-clinical-text-primary sm:text-2xl">{baselineRiskPercent.toFixed(1)}%</p>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-4 sm:p-5">
           <p className="text-xs uppercase tracking-wide text-clinical-text-muted">Potential cancellation risk reduction</p>
-          <p className="mt-1 font-mono text-2xl font-bold text-emerald-700">{estimatedAvoidedCancellationRisk}%</p>
+          <p className="mt-2 font-mono text-xl font-bold text-emerald-700 sm:text-2xl">{estimatedAvoidedCancellationRisk}%</p>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-4 sm:p-5">
           <p className="text-xs uppercase tracking-wide text-clinical-text-muted">Optimization window</p>
-          <p className="mt-1 font-mono text-2xl font-bold text-clinical-text-primary">{estimatedDelayDays}d</p>
+          <p className="mt-2 font-mono text-xl font-bold text-clinical-text-primary sm:text-2xl">{estimatedDelayDays}d</p>
         </div>
       </div>
 

@@ -61,9 +61,9 @@ export function OptimizationSimulator({
           : 'bg-fuchsia-100 text-fuchsia-800';
 
   return (
-    <section className="glass-panel rounded-xl border border-clinical-border p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-clinical-text-muted">
+    <section className="glass-panel rounded-xl border border-clinical-border p-5 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-clinical-text-muted sm:text-sm sm:tracking-wide">
           What-If Optimization Simulator
         </h3>
         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${badgeClass}`}>
@@ -71,7 +71,7 @@ export function OptimizationSimulator({
         </span>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2 sm:gap-6">
         <div className="space-y-4">
           <label className="block">
             <div className="mb-1 flex justify-between text-xs text-clinical-text-muted">
@@ -131,9 +131,9 @@ export function OptimizationSimulator({
           </label>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-4 sm:p-5">
           <p className="text-xs uppercase tracking-wide text-clinical-text-muted">Projected Outcome</p>
-          <p className="mt-2 font-mono text-3xl font-bold text-clinical-text-primary">
+          <p className="mt-2 font-mono text-2xl font-bold text-clinical-text-primary sm:text-3xl">
             {projection.projected.toFixed(1)}%
           </p>
           <p className={`mt-1 text-sm font-semibold ${deltaClass}`}>

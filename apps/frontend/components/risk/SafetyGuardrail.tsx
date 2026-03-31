@@ -15,9 +15,9 @@ export function SafetyGuardrail({ confidenceScore, missingFields, abstain }: Saf
         : 'bg-red-500';
 
   return (
-    <section className="rounded-xl border border-clinical-border bg-white p-6">
+    <section className="rounded-xl border border-clinical-border bg-white p-5 sm:p-6">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-clinical-text-muted">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-clinical-text-muted sm:text-sm sm:tracking-wide">
           Safety Guardrail
         </h3>
         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">

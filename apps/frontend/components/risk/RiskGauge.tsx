@@ -37,8 +37,8 @@ export function RiskGauge({ label, score, maxScore, riskPercent, riskCategory, d
   const color = getRiskColor(riskCategory);
 
   return (
-    <div className="flex flex-col items-center rounded-xl border border-clinical-border bg-white p-6">
-      <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-clinical-text-muted">
+    <div className="flex flex-col items-center rounded-xl border border-clinical-border bg-white p-5 sm:p-6">
+      <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-clinical-text-muted sm:text-sm sm:tracking-wide">
         {label}
       </h3>
 
@@ -72,13 +72,13 @@ export function RiskGauge({ label, score, maxScore, riskPercent, riskCategory, d
       </svg>
 
       <span
-        className="mt-1 rounded-full px-3 py-1 text-sm font-semibold"
+        className="mt-1 rounded-full px-3 py-1 text-xs font-semibold sm:text-sm"
         style={{ backgroundColor: `${color}20`, color }}
       >
         {riskCategory}
       </span>
 
-      <p className="mt-2 font-mono text-lg font-bold text-clinical-text-primary">
+      <p className="mt-2 font-mono text-base font-bold text-clinical-text-primary sm:text-lg">
         {riskPercent}% risk
       </p>
 

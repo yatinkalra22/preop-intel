@@ -27,22 +27,22 @@ export function MetabolicCards({ hba1c, egfr, bmi, creatinine }: MetabolicCardsP
   const values = { hba1c, egfr, bmi, creatinine };
 
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
       {CARD_CONFIG.map((card) => {
         const val = values[card.key];
         return (
           <div
             key={card.key}
-            className={`rounded-xl border p-4 ${
+            className={`rounded-xl border p-4 sm:p-5 ${
               val.riskFlag
                 ? 'border-red-200 bg-red-50'
                 : 'border-clinical-border bg-white'
             }`}
           >
-            <p className="text-xs font-semibold uppercase tracking-wide text-clinical-text-muted">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-clinical-text-muted">
               {card.label}
             </p>
-            <p className={`mt-1 font-mono text-2xl font-bold ${
+            <p className={`mt-2 font-mono text-xl font-bold sm:text-2xl ${
               val.riskFlag ? 'text-risk-high' : 'text-clinical-text-primary'
             }`}>
               {val.value ?? '—'}
