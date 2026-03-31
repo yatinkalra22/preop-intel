@@ -39,6 +39,9 @@ export class AssessmentSession {
   @Column({ nullable: true })
   fhirCarePlanId!: string | null;
 
+  @Column('jsonb', { nullable: true })
+  assessmentResult!: unknown | null;
+
   @Column({ default: 'pending' })
   status!: 'pending' | 'in_progress' | 'completed' | 'failed';
 

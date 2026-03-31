@@ -127,14 +127,7 @@ export class AgentsService {
     this.emit(assessmentId, { agentName: 'orchestrator', status: 'complete', durationMs: isDemoMode ? 1500 : undefined });
 
     // Update database
-    await this.assessmentService.updateSession(assessmentId, {
-      status: 'completed',
-      rcriScore: rcri.score,
-      ariscatScore: ariscat.score,
-      overallRisk: synthesis.overallRisk,
-    });
-
-    return {
+    const assessmentResult: AssessmentResult = {
       id: assessmentId,
       patientId,
       overallRisk: synthesis.overallRisk,
@@ -154,6 +147,16 @@ export class AgentsService {
       medicationRisk: medicationData,
       fhirWriteResults: {}, // FHIR writes happen via MCP tools in production
     };
+
+    await this.assessmentService.updateSession(assessmentId, {
+      status: 'completed',
+      rcriScore: rcri.score,
+      ariscatScore: ariscat.score,
+      overallRisk: synthesis.overallRisk,
+      assessmentResult,
+    });
+
+    return assessmentResult;
   }
 
   // ─── FHIR Data Fetchers ────────────────────────────────────────────────────

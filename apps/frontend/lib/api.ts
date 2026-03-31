@@ -7,6 +7,19 @@ import type { StartAssessmentRequest, AssessmentResult } from '@preop-intel/shar
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api';
 
+export interface AssessmentSessionResponse {
+  id: string;
+  patientId: string;
+  fhirBaseUrl: string;
+  plannedProcedure: string | null;
+  rcriScore: number | null;
+  ariscatScore: number | null;
+  overallRisk: string | null;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  createdAt: string;
+  assessmentResult?: AssessmentResult | null;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -26,10 +39,10 @@ export const api = {
     }),
 
   getAssessment: (id: string) =>
-    request<any>(`/assessments/${id}`),
+    request<AssessmentSessionResponse>(`/assessments/${id}`),
 
   getPatientAssessments: (patientId: string) =>
-    request<any[]>(`/assessments/patient/${patientId}`),
+    request<AssessmentSessionResponse[]>(`/assessments/patient/${patientId}`),
 
   /** SSE stream URL for agent status updates */
   getStreamUrl: (assessmentId: string) =>

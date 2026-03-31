@@ -71,6 +71,6 @@ export class AssessmentService {
 
   /** Update assessment session in database */
   async updateSession(id: string, updates: Partial<AssessmentSession>): Promise<void> {
-    await this.repo.update(id, updates);
+    await this.repo.update(id, updates as any);
   }
 }

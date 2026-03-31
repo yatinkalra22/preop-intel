@@ -23,6 +23,11 @@ export class AssessmentController {
       assessmentId: id,
       ...body,
     }).catch(err => {
+      this.assessmentService.emitAgentUpdate(id, {
+        agentName: 'orchestrator',
+        status: 'error',
+        error: err instanceof Error ? err.message : 'Assessment pipeline failed',
+      });
       this.assessmentService.updateSession(id, { status: 'failed' });
     });
 
