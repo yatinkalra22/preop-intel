@@ -12,6 +12,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { DEMO_PATIENT, DEMO_DATA, DEMO_FHIR_RESOURCES } from '@preop-intel/shared';
 import type { AgentName, AgentStatus, AgentStatusUpdate, AssessmentResult } from '@preop-intel/shared';
 import { PatientBanner } from '@/components/layout/PatientBanner';
+import { JourneyStepper } from '@/components/layout/JourneyStepper';
 import { AgentStatusPanel } from '@/components/agents/AgentStatusPanel';
 import { RiskGauge } from '@/components/risk/RiskGauge';
 import { RiskBanner } from '@/components/risk/RiskBanner';
@@ -338,6 +339,8 @@ export default function AssessmentPage() {
       />
 
       <div className="mx-auto max-w-7xl px-6 py-8 fade-rise">
+        <JourneyStepper currentStep={3} />
+
         {/* Breadcrumb navigation */}
         <nav className="mb-6 text-sm text-clinical-text-muted">
           <button onClick={() => router.push('/dashboard')} className="hover:text-clinical-accent">
@@ -350,6 +353,18 @@ export default function AssessmentPage() {
           <span className="mx-2">/</span>
           <span className="text-clinical-text-primary">Risk Assessment</span>
         </nav>
+
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <p className="text-sm text-clinical-text-muted">
+            Run assessment, review recommendations, then share FHIR outputs with downstream systems.
+          </p>
+          <button
+            onClick={() => router.push(`/patient/${patientId}`)}
+            className="rounded-lg border border-clinical-border px-3 py-1.5 text-sm font-medium text-clinical-text-primary transition-colors hover:bg-slate-50"
+          >
+            Back to Clinical Summary
+          </button>
+        </div>
 
         {/* Start button */}
         {phase === 'idle' && (

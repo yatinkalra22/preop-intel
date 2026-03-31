@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePreOpStore } from '@/lib/store';
 import { DEMO_PATIENT, DEMO_DATA } from '@preop-intel/shared';
+import { JourneyStepper } from '@/components/layout/JourneyStepper';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -43,6 +44,20 @@ export default function DashboardPage() {
             </p>
           </div>
         </div>
+      </section>
+
+      <JourneyStepper currentStep={1} />
+
+      <section className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <p className="text-sm text-clinical-text-muted">
+          Fastest route: select patient and launch assessment in one click.
+        </p>
+        <button
+          onClick={() => router.push(`/patient/${DEMO_PATIENT.id}/assessment`)}
+          className="rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-700"
+        >
+          Assess {DEMO_PATIENT.name}
+        </button>
       </section>
 
       <div className="glass-panel overflow-hidden rounded-2xl border border-clinical-border shadow-sm">

@@ -7,6 +7,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { DEMO_PATIENT, DEMO_DATA } from '@preop-intel/shared';
 import { PatientBanner } from '@/components/layout/PatientBanner';
+import { JourneyStepper } from '@/components/layout/JourneyStepper';
 
 export default function PatientOverviewPage() {
   const { patientId } = useParams<{ patientId: string }>();
@@ -26,6 +27,8 @@ export default function PatientOverviewPage() {
       />
 
       <div className="mx-auto max-w-7xl px-6 py-8">
+        <JourneyStepper currentStep={2} />
+
         {/* Breadcrumb navigation */}
         <nav className="mb-6 text-sm text-clinical-text-muted">
           <button onClick={() => router.push('/dashboard')} className="hover:text-clinical-accent">
@@ -46,6 +49,10 @@ export default function PatientOverviewPage() {
           >
             Start PreOp Assessment
           </button>
+        </div>
+
+        <div className="mb-6 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+          Next step: run the assessment to generate recommendations and write structured FHIR resources.
         </div>
 
         {/* Grid layout — 2 columns on desktop */}
