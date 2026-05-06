@@ -19,6 +19,7 @@ import { registerCardiacTool } from './tools/cardiac.tool.js';
 import { registerPulmonaryTool } from './tools/pulmonary.tool.js';
 import { registerMetabolicTool } from './tools/metabolic.tool.js';
 import { registerMedicationTool } from './tools/medication.tool.js';
+import { registerDocumentsTool } from './tools/documents.tool.js';
 import { registerCalculatorTools } from './tools/calculators.tool.js';
 import { registerWriteTools } from './tools/write.tools.js';
 
@@ -43,6 +44,9 @@ registerCalculatorTools(server);
 // Phase 5: Write tools (4)
 registerWriteTools(server);
 
+// Day 1 (notes-extraction wedge): Document retrieval (1)
+registerDocumentsTool(server);
+
 // ─── SSE Transport ───────────────────────────────────────────────────────────
 // Each SSE connection gets its own transport instance.
 // The /mcp endpoint opens the SSE stream, /messages receives MCP requests.
@@ -64,7 +68,7 @@ app.post('/messages', async (req, res) => {
 
 // ─── Health check ────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', server: 'preop-intel-mcp', tools: 11 });
+  res.json({ status: 'ok', server: 'preop-intel-mcp', tools: 12 });
 });
 
 // ─── Start ───────────────────────────────────────────────────────────────────

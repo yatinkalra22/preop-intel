@@ -22,7 +22,8 @@ out/
 .DS_Store
 Thumbs.db
 
-# Build plan (local only — not committed)
+# Superpowers planning docs
+docs/superpowers/
 BUILD_PLAN.md
 
 # Serverless

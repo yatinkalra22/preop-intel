@@ -1,8 +1,9 @@
 import type { RcriResult, AriscatResult, MetabolicRiskData, MedicationRiskData, RiskRecommendation } from './risk.types.js';
+import type { ClinicalFinding } from './note.types.js';
 
 // ─── Agent Status ────────────────────────────────────────────────────────────
 
-export type AgentName = 'cardiac' | 'pulmonary' | 'metabolic' | 'orchestrator';
+export type AgentName = 'note-extractor' | 'cardiac' | 'pulmonary' | 'metabolic' | 'orchestrator';
 export type AgentStatus = 'idle' | 'running' | 'complete' | 'error';
 
 export interface AgentStatusUpdate {
@@ -40,6 +41,7 @@ export interface AssessmentResult {
   metabolicRisk: MetabolicRiskData;
   medicationRisk: MedicationRiskData;
   fhirWriteResults: FhirWriteResults;
+  findings?: ClinicalFinding[];
 }
 
 // ─── Assessment Start Request ────────────────────────────────────────────────

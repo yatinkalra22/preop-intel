@@ -43,6 +43,17 @@ export type {
   StartAssessmentRequest,
 } from './types/agent.types.js';
 
+export type {
+  ClinicalDocument,
+  ClinicalFinding,
+  FindingCategory,
+  FindingSeverity,
+  FindingDisplayState,
+  NoteExtractorInput,
+  NoteExtractorOutput,
+} from './types/note.types.js';
+export { FINDING_CONFIDENCE } from './types/note.types.js';
+
 // Constants
 export { LOINC } from './constants/loinc.constants.js';
 export type { LoincCode } from './constants/loinc.constants.js';
@@ -60,3 +71,4 @@ export {
 // Mock / Demo data
 export { DEMO_DATA, DEMO_PATIENT } from './mock/demo-data.js';
 export { DEMO_FHIR_RESOURCES } from './mock/demo-fhir-resources.js';
+export { DEMO_NOTES } from './mock/demo-notes.js';
