@@ -19,10 +19,10 @@ import { RiskBanner } from '@/components/risk/RiskBanner';
 import { MetabolicCards } from '@/components/risk/MetabolicCards';
 import { RecommendationsTable } from '@/components/risk/RecommendationsTable';
 import { FhirResourceViewer } from '@/components/fhir/FhirResourceViewer';
-import { OptimizationSimulator } from '@/components/risk/OptimizationSimulator';
 import { SafetyGuardrail } from '@/components/risk/SafetyGuardrail';
 import { ImpactSnapshot } from '@/components/risk/ImpactSnapshot';
-import { JudgingScorecard } from '@/components/risk/JudgingScorecard';
+import { FindingsPanel } from '@/components/findings/FindingsPanel';
+import { CancellationPanel } from '@/components/findings/CancellationPanel';
 import { api } from '@/lib/api';
 import { usePreOpStore } from '@/lib/store';
 
@@ -35,21 +35,25 @@ interface AgentState {
 }
 
 const INITIAL_AGENTS: AgentState[] = [
-  { name: 'cardiac', displayName: 'Cardiac Risk Agent', description: 'RCRI calculation from FHIR conditions + observations', status: 'idle' },
-  { name: 'pulmonary', displayName: 'Pulmonary Risk Agent', description: 'ARISCAT score from SpO2, hemoglobin, patient age', status: 'idle' },
-  { name: 'metabolic', displayName: 'Metabolic Risk Agent', description: 'HbA1c, eGFR, BMI, medication flags', status: 'idle' },
-  { name: 'orchestrator', displayName: 'Orchestrator Agent', description: 'Claude AI synthesis + FHIR resource writes', status: 'idle' },
+  { name: 'note-extractor', displayName: 'Note Extractor Agent', description: 'Reads H&P, consult, and outside-discharge notes; extracts verifiable findings', status: 'idle' },
+  { name: 'cardiac', displayName: 'Cardiac Risk Agent', description: 'RCRI + routed cardiac findings (note-derived MI, anticoagulant)', status: 'idle' },
+  { name: 'pulmonary', displayName: 'Pulmonary Risk Agent', description: 'ARISCAT + routed respiratory and functional-capacity findings', status: 'idle' },
+  { name: 'metabolic', displayName: 'Metabolic Risk Agent', description: 'HbA1c, eGFR, BMI + routed metabolic findings', status: 'idle' },
+  { name: 'orchestrator', displayName: 'Orchestrator Agent', description: 'Claude synthesis · cancellation risk · FHIR write-back with SHARP provenance', status: 'idle' },
 ];
 
 // Demo timing — artificial delays so agents don't look fake.
-// Cardiac/Pulmonary/Metabolic run "in parallel", orchestrator after.
+// Note-extractor first (reads docs), then cardiac/pulmonary/metabolic in parallel,
+// then orchestrator synthesis.
 const DEMO_TIMELINE = [
-  { agents: ['cardiac', 'pulmonary', 'metabolic'], action: 'running' as const, delay: 0 },
-  { agents: ['cardiac'], action: 'complete' as const, delay: 1200, durationMs: 1200 },
-  { agents: ['pulmonary'], action: 'complete' as const, delay: 1800, durationMs: 1800 },
-  { agents: ['metabolic'], action: 'complete' as const, delay: 2200, durationMs: 2200 },
-  { agents: ['orchestrator'], action: 'running' as const, delay: 2500 },
-  { agents: ['orchestrator'], action: 'complete' as const, delay: 5000, durationMs: 2500 },
+  { agents: ['note-extractor'], action: 'running' as const, delay: 0 },
+  { agents: ['note-extractor'], action: 'complete' as const, delay: 1100, durationMs: 1100 },
+  { agents: ['cardiac', 'pulmonary', 'metabolic'], action: 'running' as const, delay: 1200 },
+  { agents: ['cardiac'], action: 'complete' as const, delay: 2400, durationMs: 1200 },
+  { agents: ['pulmonary'], action: 'complete' as const, delay: 3000, durationMs: 1800 },
+  { agents: ['metabolic'], action: 'complete' as const, delay: 3400, durationMs: 2200 },
+  { agents: ['orchestrator'], action: 'running' as const, delay: 3700 },
+  { agents: ['orchestrator'], action: 'complete' as const, delay: 6200, durationMs: 2500 },
 ];
 
 const DEMO_ASSESSMENT_RESULT: AssessmentResult = {
@@ -78,6 +82,108 @@ const DEMO_ASSESSMENT_RESULT: AssessmentResult = {
   metabolicRisk: DEMO_DATA.metabolic,
   medicationRisk: DEMO_DATA.medication,
   fhirWriteResults: {},
+  findings: [
+    {
+      id: 'recent-nstemi',
+      finding: 'Recent NSTEMI 4 weeks ago at outside hospital',
+      category: 'cardiac-event',
+      riskImplication: 'ACC/AHA recommends deferring elective non-cardiac surgery 60 days post-MI when reasonable.',
+      guidelineRef: 'ACC/AHA 2014 perioperative guideline',
+      sourceDocumentId: 'doc-rc-disch-2026-04-12',
+      sourceSnippet: 'NSTEMI 4 weeks ago',
+      confidence: 0.95,
+      severity: 'critical',
+      displayState: 'detected',
+      verifiedSnippet: true,
+    },
+    {
+      id: 'apixaban-hold',
+      finding: 'Apixaban discontinued 2 days ago per cardiology',
+      category: 'medication',
+      riskImplication: 'Bleeding risk if surgery <72h post-dose; confirm with anesthesia before proceeding.',
+      sourceDocumentId: 'doc-rc-hp-2026-05-04',
+      sourceSnippet: 'patient stopped apixaban 2 days ago',
+      confidence: 0.92,
+      severity: 'high',
+      displayState: 'pending-confirmation',
+      verifiedSnippet: true,
+    },
+    {
+      id: 'low-mets',
+      finding: 'Functional capacity below 4 METs (walker-dependent, dyspneic at one block)',
+      category: 'functional',
+      riskImplication: 'METs <4 → ACC/AHA recommends non-invasive cardiac stress testing pre-op.',
+      guidelineRef: 'ACC/AHA 2014 perioperative guideline',
+      sourceDocumentId: 'doc-rc-card-2026-04-28',
+      sourceSnippet: 'ambulates with walker, dyspneic at one block',
+      confidence: 0.88,
+      severity: 'moderate',
+      displayState: 'detected',
+      verifiedSnippet: true,
+    },
+  ],
+  overrides: [
+    {
+      field: 'rcri.ischemicHeartDisease',
+      structuredValue: false,
+      noteValue: true,
+      findingId: 'recent-nstemi',
+      resolution: 'note-wins',
+      reason: 'Recent NSTEMI in outside-hospital discharge summary not present in structured Condition list (confidence 0.95)',
+    },
+  ],
+  cancellationRisk: {
+    score: 92,
+    estimatedCostAvoidanceLow: 6400,
+    estimatedCostAvoidanceHigh: 10800,
+    preventableIssues: [
+      {
+        id: 'issue-recent-nstemi',
+        issue: 'Recent NSTEMI 4 weeks ago — defer elective surgery 60 days',
+        daysToFix: 1,
+        owner: 'cardiology',
+        action: 'Cardiology re-review; surgery should not proceed within 60-day window without clear cardiac stability.',
+        sourceFindingId: 'recent-nstemi',
+      },
+      {
+        id: 'issue-apixaban-hold',
+        issue: 'Apixaban discontinued — confirm hold timing and bleeding risk plan',
+        daysToFix: 1,
+        owner: 'anesthesia',
+        action: 'Anesthesia confirms 48–72h apixaban hold meets ASRA neuraxial guidance; document in pre-op checklist.',
+        sourceFindingId: 'apixaban-hold',
+      },
+      {
+        id: 'issue-low-mets',
+        issue: 'METs <4 — pre-op cardiac stress testing not yet performed',
+        daysToFix: 3,
+        owner: 'cardiology',
+        action: 'Order non-invasive stress test prior to elective surgery per ACC/AHA.',
+        sourceFindingId: 'low-mets',
+      },
+    ],
+    actionPlan: [
+      '**Cardiology**',
+      '- Re-evaluate cardiac stability today; document timing of NSTEMI vs planned surgery date.',
+      '- Order non-invasive stress test within 3 days; review with surgical team before scheduling.',
+      '',
+      '**Anesthesia**',
+      '- Confirm apixaban hold ≥48h; review bleeding-vs-thrombosis plan with surgical team within 1 day.',
+      '- Document anticoagulation status in pre-op checklist before OR booking.',
+      '',
+      '**Surgery**',
+      '- Hold OR booking pending cardiology clearance; rebook only after stress test result available.',
+    ].join('\n'),
+    inputs: {
+      findingCount: 3,
+      severityCounts: { low: 0, moderate: 1, high: 1, critical: 1 },
+      daysToSurgery: 6,
+      surgeryType: 'hip-arthroplasty',
+      orHourRateLow: 2200,
+      orHourRateHigh: 3800,
+      estimatedOrHours: 2.5,
+    },
+  },
 };
 
 export default function AssessmentPage() {
@@ -263,7 +369,7 @@ export default function AssessmentPage() {
       setResult(DEMO_ASSESSMENT_RESULT);
       setPhase('complete');
       setShowResults(true);
-    }, 5500);
+    }, 6500);
     timeoutsRef.current.push(t);
   }, [cleanupRuntime]);
 
@@ -436,23 +542,21 @@ export default function AssessmentPage() {
               urgentConcerns={currentResult.urgentConcerns}
             />
 
-            <JudgingScorecard
-              confidenceScore={confidenceScore}
-              recommendationsCount={currentResult.recommendations.length}
-              urgentConcernsCount={currentResult.urgentConcerns.length}
-              riskPercent={currentResult.overallRiskPercent}
-            />
+            {currentResult.findings && currentResult.findings.length > 0 && (
+              <FindingsPanel
+                findings={currentResult.findings}
+                documentCount={currentResult.findings.length > 0 ? undefined : 0}
+              />
+            )}
+
+            {currentResult.cancellationRisk && (
+              <CancellationPanel cancellationRisk={currentResult.cancellationRisk} />
+            )}
 
             <SafetyGuardrail
               confidenceScore={confidenceScore}
               missingFields={missingCriticalFields}
               abstain={shouldAbstain}
-            />
-
-            <OptimizationSimulator
-              baselineRiskPercent={currentResult.overallRiskPercent}
-              baselineHbA1c={currentResult.metabolicRisk.hba1c.value}
-              baselineCreatinine={currentResult.metabolicRisk.creatinine.value}
             />
 
             <ImpactSnapshot
