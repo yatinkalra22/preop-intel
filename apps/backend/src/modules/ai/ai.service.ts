@@ -14,7 +14,7 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
-import type { RcriResult, AriscatResult } from '@preop-intel/shared';
+import type { RcriResult, AriscatResult, ClinicalFinding, FieldOverride } from '@preop-intel/shared';
 import { buildOrchestratorPrompt } from './prompts/orchestrator.prompt';
 
 export interface SynthesisInput {
@@ -24,6 +24,9 @@ export interface SynthesisInput {
   metabolicRisk: any;
   medicationRisk: any;
   plannedProcedure: string;
+  findings?: ClinicalFinding[];
+  criticalAlerts?: string[];
+  overrides?: FieldOverride[];
 }
 
 export interface SynthesisOutput {

@@ -15,10 +15,26 @@ import { Injectable, Logger } from '@nestjs/common';
 import { FhirService } from '../fhir/fhir.service';
 import { RiskService } from '../risk/risk.service';
 import { AiService } from '../ai/ai.service';
+import { CancellationService } from '../risk/cancellation.service';
 import { AssessmentService } from '../assessment/assessment.service';
+import { NoteExtractorService } from './note-extractor.service';
+import {
+  applyFindingsToCardiac,
+  applyFindingsToPulmonary,
+  applyFindingsToMetabolic,
+} from './findings-application';
+import { routeFindingsToSpecialist } from './findings-routing';
 import { LOINC, ICD10_RCRI, ICD10_RESPIRATORY_INFECTION, METABOLIC_THRESHOLDS } from '@preop-intel/shared';
-import { DEMO_DATA } from '@preop-intel/shared';
-import type { RcriInput, AriscatInput, AgentStatusUpdate, AssessmentResult } from '@preop-intel/shared';
+import { DEMO_DATA, DEMO_NOTES } from '@preop-intel/shared';
+import type {
+  RcriInput,
+  AriscatInput,
+  AgentStatusUpdate,
+  AssessmentResult,
+  ClinicalDocument,
+  ClinicalFinding,
+  FieldOverride,
+} from '@preop-intel/shared';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -31,6 +47,8 @@ export class AgentsService {
     private riskService: RiskService,
     private aiService: AiService,
     private assessmentService: AssessmentService,
+    private noteExtractorService: NoteExtractorService,
+    private cancellationService: CancellationService,
   ) {}
 
   async runAssessment(params: {
@@ -94,17 +112,79 @@ export class AgentsService {
       patient = patientResult;
     }
 
-    // Calculate risk scores
-    const rcri = this.riskService.calculateRcri(cardiacData as RcriInput);
-    const ariscat = this.riskService.calculateAriscat({
+    // ─── Note Extractor ──────────────────────────────────────────────────────
+    // Pulls clinical notes, extracts risk-relevant findings with verbatim
+    // citations + verifier + confidence gating. Demo mode uses DEMO_NOTES;
+    // live mode uses an empty array until MeldRx seeding (Day 4). The pipeline
+    // gracefully degrades with no findings.
+
+    this.emit(assessmentId, { agentName: 'note-extractor', status: 'running' });
+    const extractorStart = Date.now();
+    const documents: ClinicalDocument[] = isDemoMode ? DEMO_NOTES : [];
+
+    let findings: ClinicalFinding[] = [];
+    if (documents.length > 0) {
+      try {
+        const extractorOutput = await this.noteExtractorService.extract({
+          documents,
+          patientContext: {
+            age: patient?.birthDate
+              ? new Date().getFullYear() - new Date(patient.birthDate).getFullYear()
+              : (pulmonaryData?.age ?? 0),
+            sex: (patient?.gender as 'male' | 'female' | 'other' | 'unknown') ?? 'unknown',
+            plannedProcedure,
+          },
+        });
+        findings = extractorOutput.findings;
+      } catch (err) {
+        this.logger.error('Note extractor failed; continuing with no findings', err);
+      }
+    }
+    this.emit(assessmentId, {
+      agentName: 'note-extractor',
+      status: 'complete',
+      durationMs: Date.now() - extractorStart,
+    });
+
+    // ─── Apply findings to specialist inputs ─────────────────────────────────
+    // Each specialist consumes only its routed-by-category findings.
+
+    const cardiacOut = applyFindingsToCardiac(
+      cardiacData as RcriInput,
+      routeFindingsToSpecialist(findings, 'cardiac'),
+    );
+    const pulmonaryStructured: AriscatInput = {
       age: pulmonaryData.age,
       spo2Preop: pulmonaryData.spo2Value,
       respiratoryInfectionLastMonth: pulmonaryData.hasRespiratoryInfection,
       preopHemoglobin: pulmonaryData.hemoglobinValue,
-      surgicalIncisionSite: 'peripheral', // Default for hip arthroplasty
+      surgicalIncisionSite: 'peripheral',
       surgeryDurationHours: 2,
       emergencySurgery: false,
-    } as AriscatInput);
+    };
+    const pulmonaryOut = applyFindingsToPulmonary(
+      pulmonaryStructured,
+      routeFindingsToSpecialist(findings, 'pulmonary'),
+    );
+    const metabolicOut = applyFindingsToMetabolic(
+      metabolicData,
+      routeFindingsToSpecialist(findings, 'metabolic'),
+    );
+
+    const overrides: FieldOverride[] = [
+      ...cardiacOut.overrides,
+      ...pulmonaryOut.overrides,
+      ...metabolicOut.overrides,
+    ];
+    const criticalAlerts: string[] = [
+      ...cardiacOut.criticalAlerts,
+      ...pulmonaryOut.criticalAlerts,
+      ...metabolicOut.criticalAlerts,
+    ];
+
+    // Calculate risk scores using ADJUSTED inputs.
+    const rcri = this.riskService.calculateRcri(cardiacOut.adjustedInput);
+    const ariscat = this.riskService.calculateAriscat(pulmonaryOut.adjustedInput);
 
     // Orchestrator: Claude AI synthesis
     this.emit(assessmentId, { agentName: 'orchestrator', status: 'running' });
@@ -115,16 +195,38 @@ export class AgentsService {
         patient,
         rcri,
         ariscat,
-        metabolicRisk: metabolicData,
+        metabolicRisk: metabolicOut.adjustedInput,
         medicationRisk: medicationData,
         plannedProcedure,
+        findings,
+        criticalAlerts,
+        overrides,
       });
     } catch (err) {
       this.logger.error('AI synthesis failed, using fallback', err);
-      synthesis = this.buildFallbackSynthesis(rcri, ariscat, metabolicData);
+      synthesis = this.buildFallbackSynthesis(rcri, ariscat, metabolicOut.adjustedInput);
     }
 
     this.emit(assessmentId, { agentName: 'orchestrator', status: 'complete', durationMs: isDemoMode ? 1500 : undefined });
+
+    // ─── Cancellation risk ───────────────────────────────────────────────────
+    // Days-to-surgery: derived from plannedProcedure scheduled date when
+    // available. For demo Robert Chen (2026-05-12 surgery) we hard-code 6.
+
+    const daysToSurgery = computeDaysToSurgery(plannedProcedure);
+    const surgeryType = inferSurgeryType(plannedProcedure);
+
+    let cancellationRisk;
+    try {
+      cancellationRisk = await this.cancellationService.assess({
+        findings,
+        daysToSurgery,
+        surgeryType,
+        plannedProcedureLabel: plannedProcedure,
+      });
+    } catch (err) {
+      this.logger.error('Cancellation risk computation failed', err);
+    }
 
     // Update database
     const assessmentResult: AssessmentResult = {
@@ -143,9 +245,12 @@ export class AgentsService {
       })),
       rcri,
       ariscat,
-      metabolicRisk: metabolicData,
+      metabolicRisk: metabolicOut.adjustedInput,
       medicationRisk: medicationData,
       fhirWriteResults: {}, // FHIR writes happen via MCP tools in production
+      findings,
+      overrides,
+      cancellationRisk,
     };
 
     await this.assessmentService.updateSession(assessmentId, {
@@ -266,4 +371,28 @@ export class AgentsService {
       optimizationRequired: isHighRisk,
     };
   }
+}
+
+// ─── Procedure parsing helpers ────────────────────────────────────────────────
+
+function inferSurgeryType(plannedProcedure: string): string {
+  const p = plannedProcedure.toLowerCase();
+  if (p.includes('hip') && p.includes('arthroplasty')) return 'hip-arthroplasty';
+  if (p.includes('knee') && p.includes('arthroplasty')) return 'knee-arthroplasty';
+  if (p.includes('cabg') || p.includes('coronary') || p.includes('bypass')) return 'cardiac-bypass';
+  if (p.includes('abdominal') || p.includes('colectomy') || p.includes('hernia')) return 'general-abdominal';
+  return 'default';
+}
+
+function computeDaysToSurgery(plannedProcedure: string): number {
+  // Parse a YYYY-MM-DD date from the procedure label if present, else default to 7.
+  const match = plannedProcedure.match(/(\d{4}-\d{2}-\d{2})/);
+  if (match) {
+    const surgeryDate = new Date(match[1]);
+    const now = new Date();
+    const ms = surgeryDate.getTime() - now.getTime();
+    const days = Math.max(0, Math.round(ms / (1000 * 60 * 60 * 24)));
+    return days;
+  }
+  return 7;
 }

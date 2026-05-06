@@ -54,6 +54,19 @@ export type {
 } from './types/note.types.js';
 export { FINDING_CONFIDENCE } from './types/note.types.js';
 
+export type {
+  CancellationRisk,
+  PreventableIssue,
+  FieldOverride,
+  SurgeryCostProfile,
+  CancellationScoreInput,
+} from './types/cancellation.types.js';
+export {
+  SURGERY_COST_PROFILES,
+  SEVERITY_COST_CONTRIBUTION,
+  SEVERITY_SCORE_WEIGHT,
+} from './types/cancellation.types.js';
+
 // Constants
 export { LOINC } from './constants/loinc.constants.js';
 export type { LoincCode } from './constants/loinc.constants.js';

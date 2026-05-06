@@ -1,5 +1,6 @@
 import type { RcriResult, AriscatResult, MetabolicRiskData, MedicationRiskData, RiskRecommendation } from './risk.types.js';
 import type { ClinicalFinding } from './note.types.js';
+import type { CancellationRisk, FieldOverride } from './cancellation.types.js';
 
 // ─── Agent Status ────────────────────────────────────────────────────────────
 
@@ -42,6 +43,8 @@ export interface AssessmentResult {
   medicationRisk: MedicationRiskData;
   fhirWriteResults: FhirWriteResults;
   findings?: ClinicalFinding[];
+  overrides?: FieldOverride[];
+  cancellationRisk?: CancellationRisk;
 }
 
 // ─── Assessment Start Request ────────────────────────────────────────────────
