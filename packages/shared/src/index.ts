@@ -67,6 +67,13 @@ export {
   SEVERITY_SCORE_WEIGHT,
 } from './types/cancellation.types.js';
 
+export type {
+  SharpContext,
+  SharpEvidenceLink,
+  FhirExtension,
+} from './types/sharp.types.js';
+export { SHARP_EXTENSION, buildSharpExtensions } from './types/sharp.types.js';
+
 // Constants
 export { LOINC } from './constants/loinc.constants.js';
 export type { LoincCode } from './constants/loinc.constants.js';

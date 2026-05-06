@@ -22,8 +22,12 @@ import {
   applyFindingsToCardiac,
   applyFindingsToPulmonary,
   applyFindingsToMetabolic,
+  type CardiacSpecialistOutput,
+  type PulmonarySpecialistOutput,
+  type MetabolicSpecialistOutput,
 } from './findings-application';
 import { routeFindingsToSpecialist } from './findings-routing';
+import { A2AClient } from '../a2a/a2a.client';
 import { LOINC, ICD10_RCRI, ICD10_RESPIRATORY_INFECTION, METABOLIC_THRESHOLDS } from '@preop-intel/shared';
 import { DEMO_DATA, DEMO_NOTES } from '@preop-intel/shared';
 import type {
@@ -49,6 +53,7 @@ export class AgentsService {
     private assessmentService: AssessmentService,
     private noteExtractorService: NoteExtractorService,
     private cancellationService: CancellationService,
+    private a2aClient: A2AClient,
   ) {}
 
   async runAssessment(params: {
@@ -148,11 +153,12 @@ export class AgentsService {
 
     // ─── Apply findings to specialist inputs ─────────────────────────────────
     // Each specialist consumes only its routed-by-category findings.
+    //
+    // A2A_MODE=live dispatches to specialists via real HTTP (visible in
+    // DevTools network panel). A2A_MODE=local calls the same pure functions
+    // in-process. Output is byte-identical so demo determinism is preserved.
 
-    const cardiacOut = applyFindingsToCardiac(
-      cardiacData as RcriInput,
-      routeFindingsToSpecialist(findings, 'cardiac'),
-    );
+    const a2aLive = this.a2aClient.isLive();
     const pulmonaryStructured: AriscatInput = {
       age: pulmonaryData.age,
       spo2Preop: pulmonaryData.spo2Value,
@@ -162,14 +168,29 @@ export class AgentsService {
       surgeryDurationHours: 2,
       emergencySurgery: false,
     };
-    const pulmonaryOut = applyFindingsToPulmonary(
-      pulmonaryStructured,
-      routeFindingsToSpecialist(findings, 'pulmonary'),
-    );
-    const metabolicOut = applyFindingsToMetabolic(
-      metabolicData,
-      routeFindingsToSpecialist(findings, 'metabolic'),
-    );
+
+    const cardiacFindings = routeFindingsToSpecialist(findings, 'cardiac');
+    const pulmonaryFindings = routeFindingsToSpecialist(findings, 'pulmonary');
+    const metabolicFindings = routeFindingsToSpecialist(findings, 'metabolic');
+
+    let cardiacOut: CardiacSpecialistOutput = applyFindingsToCardiac(cardiacData as RcriInput, cardiacFindings);
+    let pulmonaryOut: PulmonarySpecialistOutput = applyFindingsToPulmonary(pulmonaryStructured, pulmonaryFindings);
+    let metabolicOut: MetabolicSpecialistOutput = applyFindingsToMetabolic(metabolicData, metabolicFindings);
+
+    if (a2aLive) {
+      try {
+        const [c, p, m] = await Promise.all([
+          this.a2aClient.invoke<CardiacSpecialistOutput>('cardiac', { structured: cardiacData, findings: cardiacFindings }, { assessmentId, requestedBy: 'orchestrator' }),
+          this.a2aClient.invoke<PulmonarySpecialistOutput>('pulmonary', { structured: pulmonaryStructured, findings: pulmonaryFindings }, { assessmentId, requestedBy: 'orchestrator' }),
+          this.a2aClient.invoke<MetabolicSpecialistOutput>('metabolic', { structured: metabolicData, findings: metabolicFindings }, { assessmentId, requestedBy: 'orchestrator' }),
+        ]);
+        cardiacOut = c;
+        pulmonaryOut = p;
+        metabolicOut = m;
+      } catch (err) {
+        this.logger.warn('A2A live dispatch failed, retaining local-mode results', err);
+      }
+    }
 
     const overrides: FieldOverride[] = [
       ...cardiacOut.overrides,

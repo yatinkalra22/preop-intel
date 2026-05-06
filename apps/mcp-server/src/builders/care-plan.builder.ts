@@ -1,4 +1,5 @@
-import type { FhirCarePlan, FhirGoal } from '@preop-intel/shared';
+import type { FhirCarePlan, FhirGoal, SharpContext } from '@preop-intel/shared';
+import { buildSharpExtensions } from '@preop-intel/shared';
 
 // Builds FHIR R4 CarePlan + Goal resources.
 // Why create Goals as separate resources? FHIR requires Goal to be its own
@@ -14,6 +15,7 @@ export interface CarePlanInput {
     timeframe: string;
   }>;
   activities: string[];
+  sharpContext?: SharpContext;
 }
 
 export class CarePlanBuilder {
@@ -31,6 +33,8 @@ export class CarePlanBuilder {
         dueDate: calculateDueDate(g.timeframe),
       }],
     }));
+
+    const sharpExtensions = buildSharpExtensions(input.sharpContext);
 
     const carePlan: FhirCarePlan = {
       resourceType: 'CarePlan',
@@ -50,7 +54,14 @@ export class CarePlanBuilder {
           description: desc,
         },
       })),
+      ...(sharpExtensions.length > 0 ? { extension: sharpExtensions } : {}),
     };
+
+    if (sharpExtensions.length > 0) {
+      for (const goal of goals) {
+        (goal as FhirGoal & { extension?: unknown[] }).extension = sharpExtensions;
+      }
+    }
 
     return { carePlan, goals };
   }

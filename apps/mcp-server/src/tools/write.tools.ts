@@ -3,7 +3,21 @@ import { z } from 'zod';
 import { FhirClient } from '../fhir/client.js';
 import { RiskAssessmentBuilder } from '../builders/risk-assessment.builder.js';
 import { CarePlanBuilder } from '../builders/care-plan.builder.js';
-import { SNOMED_SPECIALTIES } from '@preop-intel/shared';
+import { SNOMED_SPECIALTIES, buildSharpExtensions, type SharpContext } from '@preop-intel/shared';
+
+// Zod schema for the optional SHARP context that callers may attach to any
+// write tool. Mirrors the SharpContext type in shared.
+const sharpContextSchema = z.object({
+  sourceAgent: z.string(),
+  evidenceLinks: z.array(z.object({
+    documentReference: z.string(),
+    snippet: z.string(),
+    findingId: z.string().optional(),
+    category: z.string().optional(),
+    severity: z.string().optional(),
+  })).optional(),
+  confidence: z.number().min(0).max(1).optional(),
+}).optional();
 
 // ─── FHIR Write Tools ────────────────────────────────────────────────────────
 // These 4 tools are PreOp Intel's key innovation — AI-to-FHIR write-back.
@@ -33,10 +47,14 @@ export function registerWriteTools(server: McpServer) {
       fhirBaseUrl: z.string(),
       accessToken: z.string(),
       plannedProcedure: z.string(),
+      sharpContext: sharpContextSchema,
     },
     async (input) => {
       const fhir = new FhirClient(input.fhirBaseUrl, input.accessToken);
-      const resource = RiskAssessmentBuilder.build(input);
+      const resource = RiskAssessmentBuilder.build({
+        ...input,
+        sharpContext: input.sharpContext as SharpContext | undefined,
+      });
       const created = await fhir.create('RiskAssessment', resource);
 
       return {
@@ -69,10 +87,14 @@ export function registerWriteTools(server: McpServer) {
       activities: z.array(z.string()),
       fhirBaseUrl: z.string(),
       accessToken: z.string(),
+      sharpContext: sharpContextSchema,
     },
     async (input) => {
       const fhir = new FhirClient(input.fhirBaseUrl, input.accessToken);
-      const { carePlan, goals } = CarePlanBuilder.build(input);
+      const { carePlan, goals } = CarePlanBuilder.build({
+        ...input,
+        sharpContext: input.sharpContext as SharpContext | undefined,
+      });
 
       // Create goals first, then reference them in the care plan
       const createdGoals = await Promise.all(
@@ -105,9 +127,11 @@ export function registerWriteTools(server: McpServer) {
       summary: z.string(),
       fhirBaseUrl: z.string(),
       accessToken: z.string(),
+      sharpContext: sharpContextSchema,
     },
-    async ({ patientId, riskLevel, summary, fhirBaseUrl, accessToken }) => {
+    async ({ patientId, riskLevel, summary, fhirBaseUrl, accessToken, sharpContext }) => {
       const fhir = new FhirClient(fhirBaseUrl, accessToken);
+      const sharpExt = buildSharpExtensions(sharpContext as SharpContext | undefined);
       const flag = {
         resourceType: 'Flag',
         status: 'active',
@@ -120,6 +144,7 @@ export function registerWriteTools(server: McpServer) {
         }],
         code: { text: `${riskLevel} Perioperative Risk: ${summary}` },
         subject: { reference: `Patient/${patientId}` },
+        ...(sharpExt.length > 0 ? { extension: sharpExt } : {}),
       };
       const created = await fhir.create('Flag', flag);
 
@@ -145,10 +170,12 @@ export function registerWriteTools(server: McpServer) {
       urgency: z.enum(['routine', 'urgent', 'asap', 'stat']),
       fhirBaseUrl: z.string(),
       accessToken: z.string(),
+      sharpContext: sharpContextSchema,
     },
-    async ({ patientId, specialty, indication, urgency, fhirBaseUrl, accessToken }) => {
+    async ({ patientId, specialty, indication, urgency, fhirBaseUrl, accessToken, sharpContext }) => {
       const fhir = new FhirClient(fhirBaseUrl, accessToken);
       const snomed = SNOMED_SPECIALTIES[specialty];
+      const sharpExt = buildSharpExtensions(sharpContext as SharpContext | undefined);
 
       const serviceRequest = {
         resourceType: 'ServiceRequest',
@@ -167,6 +194,7 @@ export function registerWriteTools(server: McpServer) {
         note: [{
           text: `Pre-operative consultation requested by PreOp Intel AI system. Indication: ${indication}`,
         }],
+        ...(sharpExt.length > 0 ? { extension: sharpExt } : {}),
       };
       const created = await fhir.create('ServiceRequest', serviceRequest);
 

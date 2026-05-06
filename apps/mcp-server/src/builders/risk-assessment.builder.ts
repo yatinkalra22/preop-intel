@@ -1,5 +1,5 @@
-import type { FhirRiskAssessment } from '@preop-intel/shared';
-import { SNOMED_RISK_ASSESSMENT } from '@preop-intel/shared';
+import type { FhirRiskAssessment, SharpContext } from '@preop-intel/shared';
+import { SNOMED_RISK_ASSESSMENT, buildSharpExtensions } from '@preop-intel/shared';
 
 // Builds a FHIR R4 RiskAssessment resource from assessment results.
 // Why a builder? Encapsulates SNOMED codes, FHIR coding systems, and resource
@@ -17,6 +17,7 @@ export interface RiskAssessmentInput {
   clinicalNarrative: string;
   recommendations: Array<{ action: string; urgency: string; rationale: string }>;
   plannedProcedure: string;
+  sharpContext?: SharpContext;
 }
 
 export class RiskAssessmentBuilder {
@@ -57,10 +58,13 @@ export class RiskAssessmentBuilder {
           display: SNOMED_RISK_ASSESSMENT.display,
         }],
       },
-      extension: [{
-        url: 'http://preop-intel.ai/fhir/StructureDefinition/planned-procedure',
-        valueString: input.plannedProcedure,
-      }],
+      extension: [
+        {
+          url: 'http://preop-intel.ai/fhir/StructureDefinition/planned-procedure',
+          valueString: input.plannedProcedure,
+        },
+        ...buildSharpExtensions(input.sharpContext),
+      ],
     };
   }
 }

@@ -3,6 +3,8 @@
 // Subsetting keeps bundle small and gives us control over consumed fields.
 // Source: https://www.hl7.org/fhir/R4/resourcelist.html
 
+import type { FhirExtension } from './sharp.types.js';
+
 // ─── Read Resources (input to risk agents) ───────────────────────────────────
 
 export interface FhirPatient {
@@ -113,7 +115,7 @@ export interface FhirRiskAssessment {
   }>;
   code?: { coding?: FhirCoding[] };
   note?: Array<{ text: string }>;
-  extension?: Array<{ url: string; valueString?: string }>;
+  extension?: FhirExtension[];
 }
 
 export interface FhirCarePlan {
@@ -131,6 +133,7 @@ export interface FhirCarePlan {
       description?: string;
     };
   }>;
+  extension?: FhirExtension[];
 }
 
 export interface FhirGoal {
@@ -139,6 +142,7 @@ export interface FhirGoal {
   lifecycleStatus: 'active' | 'completed' | 'cancelled';
   description: { text: string };
   subject: FhirReference;
+  extension?: FhirExtension[];
   target?: Array<{
     measure?: { coding?: FhirCoding[] };
     detailQuantity?: {
@@ -159,6 +163,7 @@ export interface FhirFlag {
   category?: Array<{ coding?: FhirCoding[] }>;
   code: { text: string };
   subject: FhirReference;
+  extension?: FhirExtension[];
 }
 
 export interface FhirServiceRequest {
@@ -171,6 +176,7 @@ export interface FhirServiceRequest {
   subject: FhirReference;
   reasonCode?: Array<{ text?: string }>;
   note?: Array<{ text: string }>;
+  extension?: FhirExtension[];
 }
 
 // ─── FHIR Bundle (search results) ───────────────────────────────────────────

@@ -7,6 +7,7 @@ import { AssessmentModule } from './modules/assessment/assessment.module';
 import { DatabaseModule } from './modules/database/database.module';
 import { AiModule } from './modules/ai/ai.module';
 import { AgentsModule } from './modules/agents/agents.module';
+import { A2AModule } from './modules/a2a/a2a.module';
 import { HealthController } from './modules/health/health.controller';
 
 @Module({
@@ -22,6 +23,7 @@ import { HealthController } from './modules/health/health.controller';
     AssessmentModule,
     AiModule,
     AgentsModule,
+    A2AModule,
   ],
   controllers: [HealthController],
 })

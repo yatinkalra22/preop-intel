@@ -1,16 +1,14 @@
 // Claude AI integration for risk synthesis.
 //
-// Why claude-sonnet-4-5 (not Opus)?
-// - 5x cheaper per token. Each assessment ~2000 output tokens.
-// - 2-3x faster response. Real-time demo needs speed > quality margin.
-// - Sufficient for structured JSON from provided risk data — we're not asking
-//   for novel medical reasoning, just synthesis of structured inputs.
+// Model choice: claude-opus-4-7 for orchestrator synthesis. The orchestrator
+// reasons across structured risk scores, extracted findings, override
+// provenance, and critical alerts to produce the final clinical narrative —
+// quality matters more than latency here. ~2-4s typical, acceptable.
+// Note-extractor and action-plan generation use sonnet-4-6 (high volume,
+// latency-sensitive).
 // Source: https://docs.anthropic.com/en/docs/about-claude/models
 //
-// Why single orchestrator prompt (not per-domain)?
-// Risk scores are already structured from calculators. The orchestrator's job
-// is cross-domain synthesis. Separate per-domain AI calls add latency/cost
-// without improving quality.
+// Override via env: ORCHESTRATOR_MODEL.
 
 import { Injectable, Logger } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
@@ -43,6 +41,7 @@ export interface SynthesisOutput {
 export class AiService {
   private readonly logger = new Logger(AiService.name);
   private client: Anthropic;
+  private readonly model = process.env.ORCHESTRATOR_MODEL ?? 'claude-opus-4-7';
 
   constructor() {
     this.client = new Anthropic({
@@ -54,7 +53,7 @@ export class AiService {
     const prompt = buildOrchestratorPrompt(params);
 
     const response = await this.client.messages.create({
-      model: 'claude-sonnet-4-5-20241022',
+      model: this.model,
       max_tokens: 2000,
       // Why anesthesiologist persona? Gives Claude domain context for
       // interpreting risk scores and generating clinically appropriate recs.
