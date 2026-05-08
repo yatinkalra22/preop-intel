@@ -82,7 +82,10 @@ export function FindingsPanel({ findings, documentCount }: FindingsPanelProps) {
                 className={`rounded-lg border ${sev.border} bg-slate-50/40 px-4 py-3`}
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${sev.badge}`}>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${sev.badge}`}
+                    aria-label={`Severity: ${f.severity}`}
+                  >
                     {f.severity}
                   </span>
                   <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-clinical-text-muted">

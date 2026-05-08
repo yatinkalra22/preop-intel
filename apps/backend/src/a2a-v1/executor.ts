@@ -17,6 +17,11 @@
 //     ariscat: AriscatInput,
 //     metabolic: MetabolicRiskData,
 //     findings?: ClinicalFinding[],
+//     // optional: source documents for defensive snippet re-verification.
+//     // If passed, any finding whose sourceSnippet is not a verbatim substring
+//     // of its cited document is dropped before risk synthesis.
+//     rawFindings?: RawFinding[],
+//     documents?: ClinicalDocument[],
 //   }
 //
 // FHIR context (fhirUrl/fhirToken/patientId) is read from message metadata.
@@ -32,23 +37,25 @@ import type {
 } from '@a2a-js/sdk/server';
 import type {
   AriscatInput,
+  ClinicalDocument,
   ClinicalFinding,
   FindingCategory,
   FindingSeverity,
   MetabolicRiskData,
   RcriInput,
 } from '@preop-intel/shared';
-import { RiskService } from '../modules/risk/risk.service';
 import {
   applyFindingsToCardiac,
-  applyFindingsToPulmonary,
   applyFindingsToMetabolic,
-} from '../modules/agents/findings-application';
-import {
+  applyFindingsToPulmonary,
+  calculateAriscat,
+  calculateRcri,
   computeCancellationScore,
   computeCostBand,
   derivePreventableIssues,
-} from '../modules/risk/cancellation.service';
+  verifyAndGateFindings,
+  type RawFinding,
+} from './core/risk-core';
 import { extractFhirContext } from './fhir-context';
 
 const RcriInputSchema: z.ZodType<RcriInput> = z.object({
@@ -83,19 +90,43 @@ const MetabolicSchema: z.ZodType<MetabolicRiskData> = z.object({
   creatinine: MetabolicValueSchema,
 });
 
+const FindingCategoryEnum = z.enum(['medication', 'functional', 'cardiac-event', 'respiratory', 'metabolic', 'other']) as z.ZodType<FindingCategory>;
+const SeverityEnum = z.enum(['low', 'moderate', 'high', 'critical']) as z.ZodType<FindingSeverity>;
+
 const FindingSchema = z.object({
   id: z.string(),
   finding: z.string(),
-  category: z.enum(['medication', 'functional', 'cardiac-event', 'respiratory', 'metabolic', 'other']) as z.ZodType<FindingCategory>,
+  category: FindingCategoryEnum,
   riskImplication: z.string(),
   guidelineRef: z.string().optional(),
   sourceDocumentId: z.string(),
   sourceSnippet: z.string(),
   confidence: z.number(),
-  severity: z.enum(['low', 'moderate', 'high', 'critical']) as z.ZodType<FindingSeverity>,
+  severity: SeverityEnum,
   displayState: z.enum(['detected', 'possible', 'pending-confirmation']),
   verifiedSnippet: z.boolean(),
 }).passthrough() as z.ZodType<ClinicalFinding>;
+
+const RawFindingSchema: z.ZodType<RawFinding> = z.object({
+  id: z.string(),
+  finding: z.string(),
+  category: FindingCategoryEnum,
+  riskImplication: z.string(),
+  guidelineRef: z.string().optional(),
+  sourceDocumentId: z.string(),
+  sourceSnippet: z.string(),
+  confidence: z.number(),
+  severity: SeverityEnum,
+});
+
+const DocumentSchema: z.ZodType<ClinicalDocument> = z.object({
+  id: z.string(),
+  type: z.string(),
+  date: z.string(),
+  text: z.string(),
+  author: z.string().optional(),
+  sourceOrg: z.string().optional(),
+}).passthrough() as z.ZodType<ClinicalDocument>;
 
 const RequestSchema = z.object({
   plannedProcedure: z.string(),
@@ -105,11 +136,11 @@ const RequestSchema = z.object({
   ariscat: AriscatInputSchema,
   metabolic: MetabolicSchema,
   findings: z.array(FindingSchema).optional(),
+  rawFindings: z.array(RawFindingSchema).optional(),
+  documents: z.array(DocumentSchema).optional(),
 });
 
 export class PreOpRiskExecutor implements AgentExecutor {
-  private readonly riskService = new RiskService();
-
   cancelTask = async (): Promise<void> => {
     /* no-op: requests are fast and synchronous */
   };
@@ -122,17 +153,31 @@ export class PreOpRiskExecutor implements AgentExecutor {
       const parsed = RequestSchema.parse(json);
 
       const fhirContext = extractFhirContext(userMessage);
-      const findings = parsed.findings ?? [];
 
-      const rcri = this.riskService.calculateRcri(parsed.rcri);
-      const ariscat = this.riskService.calculateAriscat(parsed.ariscat);
+      // Defensive verification: when the caller supplies rawFindings + documents,
+      // we drop any finding whose snippet is not a verbatim substring of its
+      // cited document. This is the second line of defense against the upstream
+      // LLM emitting hallucinated citations.
+      let findings: ClinicalFinding[] = parsed.findings ?? [];
+      let verificationReport: { rejectedCount: number; rejectionReasons: string[] } | null = null;
+      if (parsed.rawFindings && parsed.documents) {
+        const verified = verifyAndGateFindings(parsed.rawFindings, parsed.documents);
+        findings = [...findings, ...verified.kept];
+        verificationReport = {
+          rejectedCount: verified.rejectedCount,
+          rejectionReasons: verified.rejectionReasons,
+        };
+      }
+
+      const rcri = calculateRcri(parsed.rcri);
+      const ariscat = calculateAriscat(parsed.ariscat);
 
       const cardiac = applyFindingsToCardiac(parsed.rcri, findings);
       const pulmonary = applyFindingsToPulmonary(parsed.ariscat, findings);
       const metabolic = applyFindingsToMetabolic(parsed.metabolic, findings);
 
-      const rcriAfterOverrides = this.riskService.calculateRcri(cardiac.adjustedInput);
-      const ariscatAfterOverrides = this.riskService.calculateAriscat(pulmonary.adjustedInput);
+      const rcriAfterOverrides = calculateRcri(cardiac.adjustedInput);
+      const ariscatAfterOverrides = calculateAriscat(pulmonary.adjustedInput);
 
       const cancellationInput = {
         findings,
@@ -158,6 +203,7 @@ export class PreOpRiskExecutor implements AgentExecutor {
           preventableIssues,
         },
         findingsAppliedCount: findings.length,
+        verification: verificationReport,
         fhirContext: fhirContext
           ? { patientId: fhirContext.patientId, fhirUrl: fhirContext.fhirUrl }
           : null,
@@ -174,7 +220,7 @@ export class PreOpRiskExecutor implements AgentExecutor {
           },
           {
             kind: 'text',
-            text: JSON.stringify(artifact, null, 2),
+            text: JSON.stringify(artifact),
           },
         ],
         contextId,

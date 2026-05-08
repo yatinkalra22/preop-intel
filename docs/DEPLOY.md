@@ -1,169 +1,90 @@
-# Deployment
+# Deploy
 
-PreOp Intel deploys to:
+PreOp Intel ships two long-lived HTTPS services Po needs to reach: an A2A v1 orchestrator and an MCP server. Both are stateless Node + Express apps that fit any platform that runs Node — pick whatever your team is comfortable with.
 
-- **Backend (NestJS)** → AWS Lambda via Serverless Framework
-- **MCP server** → AWS Lambda via Serverless Framework
-- **Frontend (Next.js)** → Vercel
+For hackathon judging, **the only hard requirement is that Po can fetch the agent card and POST to the JSON-RPC endpoint over HTTPS.** Localhost won't work — Po runs in the cloud.
 
-This split is intentional: NestJS needs VPC access (RDS, ElastiCache) and a 30s timeout that exceeds Vercel Hobby's 10s limit, while Next.js is a first-class Vercel framework.
+## Option A — Tunnel (fastest, hackathon-friendly)
 
-## Prerequisites
-
-- AWS account with permissions for Lambda, API Gateway, SSM, RDS, ElastiCache, IAM
-- AWS CLI configured (`aws configure`)
-- Vercel account + Vercel CLI (`npm i -g vercel`)
-- Provisioned RDS Postgres instance and ElastiCache Redis cluster (free tier `db.t3.micro` / `cache.t3.micro` is sufficient)
-- Gemini API key (free at https://aistudio.google.com) — required for the standalone frontend demo path
-- Random secret for `PO_AGENT_API_KEY_PRIMARY` — required if Po will drive the A2A v1 server
-- MeldRx workspace credentials (if running live FHIR mode)
-
-## 1. Provision SSM parameters
-
-Secrets are stored in AWS SSM Parameter Store, encrypted at rest with KMS. Serverless Framework resolves them at deploy time via `${ssm:/path}`.
-
-Run the provisioning script:
+Best when you want judges to drive Po against your local laptop.
 
 ```bash
-./scripts/setup-ssm.sh prod
+# Terminal 1: run both servers locally
+npm run dev
+
+# Terminal 2: expose them via cloudflared (or ngrok / localtunnel)
+cloudflared tunnel --url http://localhost:3003 &  # → https://<random>.trycloudflare.com  (A2A v1)
+cloudflared tunnel --url http://localhost:3002 &  # → https://<random>.trycloudflare.com  (MCP)
 ```
 
-It prompts for each value and writes parameters under `/preop-intel/<stage>/`:
+Then update `.env`:
 
-| Parameter | Source |
+```
+A2A_PUBLIC_URL=https://<a2a-tunnel-url>
+```
+
+…restart the A2A server (so the AgentCard.url advertises the public URL), and paste the URLs into Po's Tools + External Agents forms.
+
+Tradeoff: tunnels die when your laptop sleeps. Re-run before the demo.
+
+## Option B — Hosted (longer-lived, post-hackathon)
+
+Both services run cleanly on:
+
+- **Fly.io** — `fly launch` from each app dir, set env via `fly secrets set`. Free tier covers low traffic.
+- **Render** — connect the repo, two services (one per `apps/*`), set start commands `npm start`.
+- **Railway** — same idea, slightly more polished UI.
+- **Vercel** — works for the frontend + can host the MCP/A2A servers as Edge functions if you wrap them in a Vercel handler. Not necessary for the hackathon.
+
+Whatever platform you pick, you need:
+
+- HTTPS termination
+- Node 20+
+- Two services (one per port — A2A on 3003, MCP on 3002 by default; the platform usually maps to its own ingress port)
+- Environment variables from `.env.example`
+
+## Required env in production
+
+| Variable | Why |
 |---|---|
-| `/preop-intel/<stage>/DATABASE_URL` | RDS connection string |
-| `/preop-intel/<stage>/REDIS_URL` | ElastiCache endpoint |
-| `/preop-intel/<stage>/GEMINI_API_KEY` | Google AI Studio (https://aistudio.google.com) |
-| `/preop-intel/<stage>/FHIR_BASE_URL` | MeldRx workspace URL |
-| `/preop-intel/<stage>/FHIR_CLIENT_ID` | MeldRx app credentials |
-| `/preop-intel/<stage>/FHIR_CLIENT_SECRET` | MeldRx app credentials |
-| `/preop-intel/<stage>/FRONTEND_URL` | Vercel URL (set after first frontend deploy) |
+| `PO_AGENT_API_KEY_PRIMARY` | Required. Random secret. Same value goes into Po. |
+| `A2A_PUBLIC_URL` | Required. Public HTTPS URL — must match the URL Po fetches the card from. The A2A server advertises this in `AgentCard.url`. |
+| `PO_AGENT_REQUIRE_API_KEY=true` | Required in prod. The default. |
+| `PO_AGENT_API_KEY_SECONDARY` | Optional. Useful for zero-downtime key rotation. |
+| `A2A_RATE_LIMIT_PER_MIN` | Optional. Tune per traffic. |
+| `MCP_MAX_DOCUMENT_BYTES` | Optional. Lower for tight memory budgets. |
 
-## 2. Deploy backend + MCP server
+## Cost (rough)
 
-```bash
-./scripts/deploy.sh prod
-```
-
-This script runs sequentially:
-
-1. `npx turbo run build` — builds all workspaces
-2. `cd apps/backend && npx serverless deploy --stage prod` — deploys NestJS
-3. `cd apps/mcp-server && npx serverless deploy --stage prod` — deploys MCP server
-4. `cd apps/frontend && vercel --prod` — deploys frontend
-
-Capture the URLs printed by each step:
-
-- Backend API URL — `https://<id>.execute-api.<region>.amazonaws.com/prod/api`
-- MCP server URL — `https://<id>.execute-api.<region>.amazonaws.com/prod/mcp`
-- Frontend URL — `https://<project>.vercel.app`
-
-## 3. Configure Vercel environment
-
-After the first frontend deploy, set Vercel env vars in the dashboard or via CLI:
-
-```bash
-cd apps/frontend
-vercel env add NEXT_PUBLIC_API_URL production
-# Enter: https://<backend-url>/api
-
-vercel env add NEXT_PUBLIC_SMART_CLIENT_ID production
-vercel env add NEXT_PUBLIC_SMART_REDIRECT_URI production
-# Enter: https://<frontend-url>/callback
-
-vercel env add NEXT_PUBLIC_DEMO_MODE production
-# Enter: true (or false for live mode)
-```
-
-Then redeploy:
-
-```bash
-vercel --prod
-```
-
-## 4. Update CORS
-
-Set the deployed frontend URL into SSM so the backend allows it:
-
-```bash
-aws ssm put-parameter \
-  --name /preop-intel/prod/FRONTEND_URL \
-  --value https://<your-frontend>.vercel.app \
-  --type String \
-  --overwrite
-```
-
-Redeploy the backend so the new value takes effect:
-
-```bash
-cd apps/backend && npx serverless deploy --stage prod
-```
-
-## 5. Verify
-
-```bash
-# Backend
-curl https://<backend-url>/api/health
-
-# MCP server
-curl https://<mcp-url>/health
-# Expect: {"status":"ok","server":"preop-intel-mcp","tools":12}
-
-# A2A agents
-curl https://<backend-url>/a2a/agents
-# Expect: { "agents": [ ... 5 cards ... ] }
-
-# Frontend (open in browser)
-open https://<frontend-url>
-```
-
-## 6. Seed live FHIR (optional)
-
-If you want live mode to find clinical notes for the demo patient, populate them on MeldRx:
-
-```bash
-FHIR_BASE_URL=https://app.meldrx.com/api/fhir/<workspace> \
-FHIR_ACCESS_TOKEN=<bearer> \
-node scripts/seed-meldrx-notes.mjs
-```
-
-The script is idempotent — re-runs use FHIR `If-None-Exist` to avoid duplicates.
-
-## Cost estimate
-
-Free tier covers most of the stack. Operational cost on a quiet account:
+For a hackathon-scale demo (~50 assessments / day):
 
 | Resource | Estimated monthly |
 |---|---|
-| Lambda (backend + MCP, ~50 invocations/day) | < $0.10 |
-| RDS `db.t3.micro` (free tier 12 months) | $0 |
-| ElastiCache `cache.t3.micro` (free tier 12 months) | $0 |
-| API Gateway (~50 req/day) | < $0.05 |
-| SSM Parameter Store | $0 |
-| Vercel Hobby | $0 |
-| Gemini API (~50 assessments, 2.5 Pro + Flash) | < $0.20 (free tier covers it) |
-| **Total** | **~$0.35/month** |
+| Fly.io shared-cpu-1x (1 service × 2) | $0 (free tier) |
+| Cloudflare tunnel | $0 |
+| Vercel Hobby (frontend visual artifact) | $0 |
+| Po workspace (free Google AI Studio key) | $0 |
+| **Total** | **$0** |
+
+Po BYO model costs land on the user's Po-configured key, not on us.
 
 ## Rollback
 
-To roll back to a previous version:
+For tunnel-based deploys: kill the tunnel, fix locally, restart.
+
+For hosted deploys: most platforms keep the previous image around — re-deploy the previous git SHA, or platform-specific rollback (`fly releases rollback`, `render service rollback`, etc.).
+
+## Smoke checks after deploy
 
 ```bash
-cd apps/backend && npx serverless rollback --timestamp <timestamp>
-cd apps/mcp-server && npx serverless rollback --timestamp <timestamp>
-cd apps/frontend && vercel rollback
+# Public agent card must respond, no auth
+curl https://your-public-host/.well-known/agent-card.json | head -c 500
+
+# MCP /health
+curl https://your-public-mcp-host/health
+
+# Auth rejection sanity
+curl -s -o /dev/null -w "%{http_code}\n" -X POST https://your-public-host/ \
+  -H "content-type: application/json" -d '{}'
+# Expect 401
 ```
-
-`npx serverless deploy list` shows available timestamps.
-
-## Teardown
-
-```bash
-cd apps/backend && npx serverless remove --stage prod
-cd apps/mcp-server && npx serverless remove --stage prod
-cd apps/frontend && vercel remove <project> --yes
-aws ssm delete-parameters-by-path --path /preop-intel/prod
-```
-
-You'll also need to manually destroy the RDS instance and ElastiCache cluster from the AWS console.

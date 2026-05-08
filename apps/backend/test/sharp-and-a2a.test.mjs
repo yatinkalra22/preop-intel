@@ -1,7 +1,4 @@
-// Day 3 unit tests:
-//   - buildSharpExtensions emits correct structure
-//   - A2AHandlersService produces same artifact as in-process functions
-//   - buildAgentCards exposes all 5 agents with matching endpoints
+// Unit tests for SHARP extension structure + A2A v1 agent card.
 //
 // Run with:  node --test apps/backend/test/sharp-and-a2a.test.mjs
 
@@ -11,12 +8,10 @@ import {
   buildSharpExtensions,
   SHARP_EXTENSION,
 } from '@preop-intel/shared';
-import { buildAgentCards } from '../dist/modules/a2a/a2a-cards.js';
+import { buildOrchestratorAgentCard } from '../dist/a2a-v1/agent-card.js';
 import {
   applyFindingsToCardiac,
-  applyFindingsToPulmonary,
-  applyFindingsToMetabolic,
-} from '../dist/modules/agents/findings-application.js';
+} from '../dist/a2a-v1/core/risk-core.js';
 
 // ─── SHARP extensions ────────────────────────────────────────────────────────
 
@@ -74,7 +69,7 @@ test('buildSharpExtensions: snippet >300 chars is truncated', () => {
   assert.equal(snippet.length, 300);
 });
 
-test('buildSharpExtensions: full context has 3 top-level extensions', () => {
+test('buildSharpExtensions: full context has 4 top-level extensions', () => {
   const exts = buildSharpExtensions({
     sourceAgent: 'orchestrator',
     evidenceLinks: [
@@ -87,25 +82,43 @@ test('buildSharpExtensions: full context has 3 top-level extensions', () => {
   assert.equal(exts.length, 4);
 });
 
-// ─── Agent cards ─────────────────────────────────────────────────────────────
+// ─── A2A v1 agent card ───────────────────────────────────────────────────────
+// Po reads the agent card at /.well-known/agent-card.json. These assertions
+// catch regressions that would silently break Po registration: protocol
+// version, extension URI, security scheme, skill id.
 
-test('agent cards: all 5 agents present with matching endpoint URLs', () => {
-  const cards = buildAgentCards('http://localhost:3001');
-  const names = Object.keys(cards).sort();
-  assert.deepEqual(names, ['cardiac', 'metabolic', 'note-extractor', 'orchestrator', 'pulmonary']);
+test('agent card: A2A v1 spec 0.3.0 with FHIR extension and X-API-Key security', () => {
+  const card = buildOrchestratorAgentCard({
+    url: 'https://preop.example.com',
+    fhirExtensionUri: 'https://app.promptopinion.ai/schemas/a2a/v1/fhir-context',
+    requireApiKey: true,
+  });
 
-  for (const [name, card] of Object.entries(cards)) {
-    assert.equal(card.name, name);
-    assert.equal(card.endpointUrl, `http://localhost:3001/a2a/agents/${name}/tasks`);
-    assert.ok(card.capabilities.length >= 1);
-    assert.ok(card.displayName.length > 0);
-  }
+  assert.equal(card.protocolVersion, '0.3.0');
+  assert.equal(card.preferredTransport, 'JSONRPC');
+  assert.equal(card.url, 'https://preop.example.com');
+
+  const fhirExt = (card.capabilities?.extensions ?? []).find(
+    e => e.uri === 'https://app.promptopinion.ai/schemas/a2a/v1/fhir-context',
+  );
+  assert.ok(fhirExt, 'FHIR-context extension must be declared in capabilities.extensions');
+
+  assert.ok(card.securitySchemes?.apiKey, 'apiKey scheme required when requireApiKey=true');
+
+  const skill = (card.skills ?? []).find(s => s.id === 'assess-preoperative-risk');
+  assert.ok(skill, 'card must expose the assess-preoperative-risk skill');
 });
 
-// ─── A2A equivalence ─────────────────────────────────────────────────────────
-// Per spec §3.3: A2A_MODE=live and A2A_MODE=local produce identical output.
-// We can't easily mount the Nest controller for a unit test, so we exercise
-// the handler logic directly and assert it equals the in-process function.
+test('agent card: requireApiKey=false emits no securitySchemes', () => {
+  const card = buildOrchestratorAgentCard({
+    url: 'http://localhost:3003',
+    fhirExtensionUri: 'https://example.test/fhir-context',
+    requireApiKey: false,
+  });
+  assert.ok(!card.securitySchemes || Object.keys(card.securitySchemes).length === 0);
+});
+
+// ─── Findings application — sanity smoke ─────────────────────────────────────
 
 const recentMI = {
   id: 'recent-mi',
@@ -130,11 +143,9 @@ const baselineRcri = {
   creatinineAbove2: false,
 };
 
-test('a2a equivalence: cardiac handler matches in-process applyFindingsToCardiac', async () => {
-  const direct = applyFindingsToCardiac(baselineRcri, [recentMI]);
-  // Simulate what A2AHandlersService.handleCardiac does:
-  const viaHandler = applyFindingsToCardiac(baselineRcri, [recentMI]);
-  assert.deepEqual(viaHandler, direct);
-  assert.equal(viaHandler.adjustedInput.ischemicHeartDisease, true);
-  assert.equal(viaHandler.overrides.length, 1);
+test('applyFindingsToCardiac: critical NSTEMI flips IHD criterion + emits override', () => {
+  const out = applyFindingsToCardiac(baselineRcri, [recentMI]);
+  assert.equal(out.adjustedInput.ischemicHeartDisease, true);
+  assert.equal(out.overrides.length, 1);
+  assert.equal(out.overrides[0].field, 'rcri.ischemicHeartDisease');
 });

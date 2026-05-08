@@ -8,16 +8,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  applyFindingsToCardiac,
+  applyFindingsToMetabolic,
+  applyFindingsToPulmonary,
   computeCancellationScore,
   computeCostBand,
   derivePreventableIssues,
-} from '../dist/modules/risk/cancellation.service.js';
-import {
-  applyFindingsToCardiac,
-  applyFindingsToPulmonary,
-  applyFindingsToMetabolic,
-} from '../dist/modules/agents/findings-application.js';
-import { routeFindingsToSpecialist } from '../dist/modules/agents/findings-routing.js';
+  routeFindingsToSpecialist,
+} from '../dist/a2a-v1/core/risk-core.js';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 

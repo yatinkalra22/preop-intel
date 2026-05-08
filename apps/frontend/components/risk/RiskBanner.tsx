@@ -46,7 +46,8 @@ export function RiskBanner({ overallRisk, overallRiskPercent, clinicalNarrative,
             <ul className="mt-3 space-y-1.5">
               {urgentConcerns.map((concern, i) => (
                 <li key={i} className={`text-sm ${styles.text} flex items-start gap-2`}>
-                  <span className="mt-0.5 text-xs">⚠</span>
+                  <span className="mt-0.5 text-xs" aria-hidden="true">⚠</span>
+                  <span className="sr-only">Warning: </span>
                   {concern}
                 </li>
               ))}

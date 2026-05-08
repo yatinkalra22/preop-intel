@@ -1,42 +1,42 @@
 # Testing
 
-PreOp Intel uses Node's built-in `node:test` runner — no Jest, no Vitest, no extra dev deps. Tests live in `apps/backend/test/*.test.mjs` and exercise the deterministic, pure-function surface of the system. The LLM-bound code path is exercised by a separate runnable smoke test that requires an Anthropic API key.
+PreOp Intel uses Node's built-in `node:test` runner — no Jest, no Vitest, no extra dev deps. Tests live in `apps/backend/test/*.test.mjs` and exercise the deterministic, pure-function surface of the system. The LLM-bound code path lives entirely inside Po (BYO agents drive the prompts in `docs/po-agents/`); we don't ship those calls in this repo, so there's nothing here that needs an API key.
 
-## Test inventory (33 unit tests)
+## Test inventory (34 unit tests)
 
 | Suite | File | Tests |
 |---|---|---|
 | Verifier | `apps/backend/test/note-extractor.verify.test.mjs` | 8 |
 | Cancellation + findings | `apps/backend/test/cancellation-and-findings.test.mjs` | 17 |
-| SHARP + A2A | `apps/backend/test/sharp-and-a2a.test.mjs` | 8 |
+| SHARP + A2A v1 agent card | `apps/backend/test/sharp-and-a2a.test.mjs` | 9 |
 
 Each suite is independently runnable and produces TAP-style output.
 
 ## Run all tests
 
 ```bash
-cd apps/backend
-npm run build              # Compile TypeScript first; tests import from dist/
-node --test test/*.test.mjs
+npm test
 ```
 
-Expected output ends with:
+This builds the backend (`tsc`) and runs all suites. Expected output ends with:
 
 ```
-ℹ tests 33
-ℹ pass 33
+ℹ tests 34
+ℹ pass 34
 ℹ fail 0
 ```
 
 If you see "Cannot find module '...dist/...'", the incremental TypeScript cache is stale. Clear and rebuild:
 
 ```bash
-rm -f tsconfig.tsbuildinfo && rm -rf dist && npm run build
+cd apps/backend && rm -f tsconfig.tsbuildinfo && rm -rf dist && npx tsc
 ```
 
 ## What's covered
 
 ### Verifier (`note-extractor.verify.test.mjs`)
+
+The verifier is the defensive substring check the A2A v1 executor runs when the upstream Po agent passes raw findings + source documents. Tests assert:
 
 - Real findings with verbatim snippets are kept
 - Planted hallucinations (snippet not in source) are dropped
@@ -70,37 +70,31 @@ Routing:
 - pulmonary receives respiratory + functional
 - metabolic receives metabolic + medication
 
-### SHARP + A2A (`sharp-and-a2a.test.mjs`)
+### SHARP + A2A v1 (`sharp-and-a2a.test.mjs`)
 
+SHARP extension structure:
 - `buildSharpExtensions(undefined)` → empty array
 - Context-source emitted with `valueString`
 - Evidence-link nests `documentReference`/`snippet`/optional sub-extensions
 - Confidence emitted with `valueDecimal`, clamped to `[0, 1]`
 - Snippets longer than 300 chars truncated
-- Full context emits 3 top-level extensions (source + evidence-link + confidence)
-- All 5 agent cards present and endpoint URLs match `/{name}/tasks`
-- A2A handler equivalence: handler output equals in-process function output
+- Full context emits 4 top-level extensions (source + 2 evidence-links + confidence)
 
-## Live LLM smoke test (requires API key)
+A2A v1 agent card (regression catches that would silently break Po registration):
+- `protocolVersion: '0.3.0'`
+- `preferredTransport: 'JSONRPC'`
+- FHIR-context extension declared in `capabilities.extensions`
+- `securitySchemes.apiKey` present when `requireApiKey: true`
+- Skill `assess-preoperative-risk` exposed
+- `requireApiKey: false` emits no `securitySchemes`
 
-Exercises the full extraction pipeline against `DEMO_NOTES`:
-
-```bash
-cd apps/backend
-GEMINI_API_KEY=... node test/note-extractor.live.mjs
-```
-
-Asserts:
-
-- ≥3 findings extracted
-- All findings have `verifiedSnippet === true`
-- Categories include `medication`, `functional`, and `cardiac-event` (the 3 wedge findings)
-
-Cost: free on `gemini-2.5-flash` within Google AI Studio's daily quota.
+Findings application smoke:
+- NSTEMI finding flips RCRI's IHD criterion via the executor's pure core
 
 ## Running a single suite
 
 ```bash
+cd apps/backend
 node --test test/note-extractor.verify.test.mjs
 node --test test/cancellation-and-findings.test.mjs
 node --test test/sharp-and-a2a.test.mjs
@@ -109,14 +103,14 @@ node --test test/sharp-and-a2a.test.mjs
 ## Adding a test
 
 1. Create `apps/backend/test/<feature>.test.mjs`
-2. Import from `../dist/...` (compiled output) — pure functions only
+2. Import from `../dist/a2a-v1/...` (compiled output) — pure functions only
 3. Use `import { test } from 'node:test'` and `import assert from 'node:assert/strict'`
-4. Make sure the function under test has been exported from the source module so the test can reach it
+4. Make sure the function under test is exported from `core/risk-core.ts` (or whichever module it lives in)
 
-For tests that need fixtures, prefer reusing `DEMO_NOTES` from `@preop-intel/shared` rather than inlining.
+For fixtures, prefer reusing `DEMO_NOTES` from `@preop-intel/shared` rather than inlining.
 
-## What's intentionally not tested
+## What's intentionally not tested in this repo
 
-Per [the design](ARCHITECTURE.md), the LLM-bound code paths (`AiService.synthesizeRiskAssessment`, `CancellationService.generateActionPlan`) are not unit-tested — their outputs are non-deterministic. They're validated end-to-end via the live smoke test and during demo rehearsal. The verifier and confidence gating that *protect* those LLM outputs are exhaustively tested.
+The LLM-driven extraction / synthesis / action-plan paths run inside Po — see `docs/po-agents/*.system.md`. Their non-determinism is exercised end-to-end during demo rehearsal in Po's UI, not here.
 
-Frontend is also not unit-tested. UI is validated via manual run-through (`npm run dev` in `apps/frontend`) and the production build (`npm run build` must succeed).
+Frontend is not unit-tested. It's a visual artifact only; validate it via `npm run build` (production build must succeed) and a manual run-through (`cd apps/frontend && npm run dev`).

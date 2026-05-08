@@ -1,13 +1,16 @@
-// Deterministic verifier tests for the note-extractor.
+// Deterministic verifier tests.
 //
 // Run with:  node --test apps/backend/test/note-extractor.verify.test.mjs
 //
-// Tests the pure verifyAndGateFindings function from the compiled service.
-// LLM extraction is exercised by note-extractor.live.mjs (requires API key).
+// Tests the pure verifyAndGateFindings function (extracted into core/risk-core).
+// In the Po-driven world the LLM extraction itself runs inside Po's BYO
+// note-extractor agent (prompt under docs/po-agents/); this verifier is the
+// defensive substring check the A2A v1 executor runs when documents are
+// passed alongside rawFindings.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { verifyAndGateFindings } from '../dist/modules/agents/note-extractor.service.js';
+import { verifyAndGateFindings } from '../dist/a2a-v1/core/risk-core.js';
 import { DEMO_NOTES } from '@preop-intel/shared';
 
 const realFinding = {
