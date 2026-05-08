@@ -1,72 +1,30 @@
-// Zustand store for global app state.
-// Why Zustand (not Redux)? 1.2kB vs 11kB. No boilerplate (actions, reducers,
-// providers). Works with Server Components without a Context provider.
-// Source: https://zustand-demo.pmnd.rs/
+// Zustand store for the visual-artifact UI.
+// Holds only display-side state (demo flag, privacy toggle). The live
+// demo runs inside Po — no FHIR creds or assessment results are stored
+// here.
 
 import { create } from 'zustand';
-import type { AssessmentResult } from '@preop-intel/shared';
 
 interface PreOpStore {
-  // SMART on FHIR context
-  fhirToken: string | null;
-  fhirBaseUrl: string | null;
-  patientId: string | null;
-
-  // Assessment
-  currentAssessmentId: string | null;
-  assessmentResult: AssessmentResult | null;
-
-  // Demo mode
   isDemoMode: boolean;
-
-  // Privacy mode
   privacyMode: boolean;
 
-  // Actions
-  setFhirContext: (token: string, baseUrl: string, patientId: string) => void;
-  setAssessmentId: (id: string) => void;
-  setAssessmentResult: (result: AssessmentResult) => void;
   enableDemoMode: () => void;
   togglePrivacyMode: () => void;
   reset: () => void;
 }
 
 export const usePreOpStore = create<PreOpStore>((set) => ({
-  fhirToken: null,
-  fhirBaseUrl: null,
-  patientId: null,
-  currentAssessmentId: null,
-  assessmentResult: null,
   isDemoMode: false,
   privacyMode: true,
 
-  setFhirContext: (token, baseUrl, patientId) =>
-    set({ fhirToken: token, fhirBaseUrl: baseUrl, patientId }),
-
-  setAssessmentId: (id) =>
-    set({ currentAssessmentId: id }),
-
-  setAssessmentResult: (result) =>
-    set({ assessmentResult: result }),
-
-  enableDemoMode: () =>
-    set({
-      isDemoMode: true,
-      patientId: 'demo-patient-001',
-      fhirBaseUrl: 'demo',
-      fhirToken: 'demo-token',
-    }),
+  enableDemoMode: () => set({ isDemoMode: true }),
 
   togglePrivacyMode: () =>
     set((state) => ({ privacyMode: !state.privacyMode })),
 
   reset: () =>
     set({
-      fhirToken: null,
-      fhirBaseUrl: null,
-      patientId: null,
-      currentAssessmentId: null,
-      assessmentResult: null,
       isDemoMode: false,
       privacyMode: true,
     }),

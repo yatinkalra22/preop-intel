@@ -1,16 +1,13 @@
-// Assessment page — the core demo screen.
-// Flow: Click "Start Assessment" → agents animate → gauges fill → risk banner
-// appears → recommendations table → FHIR resources shown. ~15-30 seconds.
-//
-// In demo mode, we simulate the SSE stream with timed state transitions.
-// In production, this would use EventSource to /api/assessments/:id/stream.
+// Assessment page — visual artifact only.
+// The live multi-agent flow runs inside Po; this page replays a hard-coded
+// timeline so the UI demos the steps without calling any backend.
 
 'use client';
 
-import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { DEMO_PATIENT, DEMO_DATA, DEMO_FHIR_RESOURCES } from '@preop-intel/shared';
-import type { AgentName, AgentStatus, AgentStatusUpdate, AssessmentResult } from '@preop-intel/shared';
+import type { AgentName, AgentStatus, AssessmentResult } from '@preop-intel/shared';
 import { PatientBanner } from '@/components/layout/PatientBanner';
 import { JourneyStepper } from '@/components/layout/JourneyStepper';
 import { AgentStatusPanel } from '@/components/agents/AgentStatusPanel';
@@ -23,8 +20,6 @@ import { SafetyGuardrail } from '@/components/risk/SafetyGuardrail';
 import { ImpactSnapshot } from '@/components/risk/ImpactSnapshot';
 import { FindingsPanel } from '@/components/findings/FindingsPanel';
 import { CancellationPanel } from '@/components/findings/CancellationPanel';
-import { api } from '@/lib/api';
-import { usePreOpStore } from '@/lib/store';
 
 interface AgentState {
   name: AgentName;
@@ -190,28 +185,15 @@ export default function AssessmentPage() {
   const { patientId } = useParams<{ patientId: string }>();
   const router = useRouter();
   const patient = DEMO_PATIENT;
-  const isDemoMode = usePreOpStore((s) => s.isDemoMode);
-  const fhirToken = usePreOpStore((s) => s.fhirToken);
-  const fhirBaseUrl = usePreOpStore((s) => s.fhirBaseUrl);
 
   const [result, setResult] = useState<AssessmentResult | null>(null);
-
   const [agents, setAgents] = useState<AgentState[]>(INITIAL_AGENTS);
   const [phase, setPhase] = useState<'idle' | 'running' | 'complete'>('idle');
   const [showResults, setShowResults] = useState(false);
-  const [assessmentId, setAssessmentId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   const currentResult = result ?? DEMO_ASSESSMENT_RESULT;
-
-  const allComplete = useMemo(
-    () => agents.every((a) => a.status === 'complete'),
-    [agents],
-  );
 
   const missingCriticalFields = useMemo(() => {
     const missing: string[] = [];
@@ -275,82 +257,14 @@ export default function AssessmentPage() {
     [currentResult],
   );
 
-  const cleanupRuntime = useCallback(() => {
+  const startDemo = useCallback(() => {
     timeoutsRef.current.forEach(clearTimeout);
     timeoutsRef.current = [];
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-  }, []);
 
-  const fetchFinalResult = useCallback(async (id: string) => {
-    try {
-      const session = await api.getAssessment(id);
-      if (session.status === 'completed') {
-        setResult(session.assessmentResult ?? DEMO_ASSESSMENT_RESULT);
-        setPhase('complete');
-        setShowResults(true);
-        return true;
-      }
-      if (session.status === 'failed') {
-        setError('Assessment failed to complete. Showing fallback demo results.');
-        setResult(DEMO_ASSESSMENT_RESULT);
-        setPhase('complete');
-        setShowResults(true);
-        return true;
-      }
-      return false;
-    } catch {
-      return false;
-    }
-  }, []);
-
-  const connectToStream = useCallback((id: string) => {
-    const source = new EventSource(api.getStreamUrl(id));
-    eventSourceRef.current = source;
-
-    source.onmessage = (event) => {
-      try {
-        const update = JSON.parse(event.data) as AgentStatusUpdate;
-        setAgents((prev) =>
-          prev.map((a) =>
-            a.name === update.agentName
-              ? {
-                  ...a,
-                  status: update.status,
-                  durationMs: update.durationMs ?? a.durationMs,
-                }
-              : a,
-          ),
-        );
-
-        if (update.status === 'error') {
-          setError(update.error ?? 'One of the specialist agents failed.');
-        }
-      } catch {
-        // Ignore malformed SSE messages.
-      }
-    };
-
-    source.onerror = () => {
-      source.close();
-      eventSourceRef.current = null;
-    };
-  }, []);
-
-  const runLocalFallbackDemo = useCallback(() => {
     setAgents(INITIAL_AGENTS);
     setPhase('running');
     setShowResults(false);
     setResult(null);
-    setError('Backend unavailable. Running local demo simulation.');
-
-    cleanupRuntime();
 
     for (const step of DEMO_TIMELINE) {
       const t = setTimeout(() => {
@@ -365,66 +279,13 @@ export default function AssessmentPage() {
       timeoutsRef.current.push(t);
     }
 
-    const t = setTimeout(() => {
+    const finish = setTimeout(() => {
       setResult(DEMO_ASSESSMENT_RESULT);
       setPhase('complete');
       setShowResults(true);
     }, 6500);
-    timeoutsRef.current.push(t);
-  }, [cleanupRuntime]);
-
-  const startDemo = useCallback(() => {
-    const run = async () => {
-      cleanupRuntime();
-
-      setAgents(INITIAL_AGENTS);
-      setPhase('running');
-      setShowResults(false);
-      setResult(null);
-      setError(null);
-
-      try {
-        const payload = {
-          patientId,
-          fhirBaseUrl: fhirBaseUrl ?? 'demo',
-          accessToken: fhirToken ?? 'demo-token',
-          plannedProcedure: patient.plannedProcedure,
-        };
-
-        const { id } = await api.startAssessment(payload);
-        setAssessmentId(id);
-        connectToStream(id);
-
-        pollingRef.current = setInterval(async () => {
-          const done = await fetchFinalResult(id);
-          if (done && pollingRef.current) {
-            clearInterval(pollingRef.current);
-            pollingRef.current = null;
-            if (eventSourceRef.current) {
-              eventSourceRef.current.close();
-              eventSourceRef.current = null;
-            }
-          }
-        }, 1200);
-      } catch {
-        runLocalFallbackDemo();
-      }
-    };
-
-    void run();
-  }, [cleanupRuntime, connectToStream, fetchFinalResult, fhirBaseUrl, fhirToken, patient.plannedProcedure, patientId, runLocalFallbackDemo]);
-
-  useEffect(() => {
-    if (phase === 'running' && allComplete && assessmentId) {
-      void fetchFinalResult(assessmentId);
-    }
-  }, [allComplete, assessmentId, fetchFinalResult, phase]);
-
-  useEffect(() => {
-    return () => {
-      cleanupRuntime();
-    };
-  }, [cleanupRuntime]);
+    timeoutsRef.current.push(finish);
+  }, []);
 
   const fhirResources = [
     { resourceType: 'RiskAssessment', label: 'Perioperative Risk Assessment', resource: DEMO_FHIR_RESOURCES.riskAssessment },
@@ -486,7 +347,7 @@ export default function AssessmentPage() {
               Results are written as FHIR R4 resources to the patient chart.
             </p>
             <p className="mb-4 text-xs font-medium uppercase tracking-wide text-clinical-text-muted">
-              Mode: {isDemoMode || !fhirToken ? 'Demo' : 'SMART on FHIR Live'}
+              Mode: Demo (visual artifact — live demo runs in Po)
             </p>
             <button
               onClick={startDemo}
@@ -494,12 +355,6 @@ export default function AssessmentPage() {
             >
               Start Assessment
             </button>
-          </div>
-        )}
-
-        {error && (
-          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            {error}
           </div>
         )}
 

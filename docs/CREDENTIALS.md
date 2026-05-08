@@ -16,7 +16,6 @@ This walks through each variable in [`.env.example`](../.env.example) end-to-end
 | `FHIR_EXTENSION_URI` | yes (default works) | Po-defined constant — leave as-is unless Po announces a new URI | — |
 | `A2A_RATE_LIMIT_PER_MIN` | optional | Config — defaults to 60 | — |
 | `MCP_MAX_DOCUMENT_BYTES` | optional | Config — defaults to 5MB | — |
-| `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_DEMO_MODE` | only if running the frontend visual | Config | — |
 
 You will **also** need credentials inside Po itself (a model API key, the workspace registration of our MCP + A2A endpoints, three BYO agent prompts). Those don't go in `.env` — they live in your Po workspace. Steps 2–5 below cover them.
 
