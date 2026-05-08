@@ -8,6 +8,9 @@ dist/
 out/
 *.tsbuildinfo
 
+# Next.js managed files (regenerated on every run — see Next docs)
+next-env.d.ts
+
 # Environment
 .env
 .env.local
