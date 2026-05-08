@@ -72,7 +72,9 @@ npm install
 
 # Configure environment
 cp .env.example .env
-# At minimum set PO_AGENT_API_KEY_PRIMARY to a random secret
+# At minimum set PO_AGENT_API_KEY_PRIMARY to a random secret.
+# For a step-by-step walkthrough of every value (where to sign up, where to
+# find the keys, what's free) → docs/CREDENTIALS.md
 
 # Build everything
 npm run build
@@ -132,6 +134,7 @@ preop-intel/
 
 | Task | Canonical doc |
 |------|---------------|
+| Get every value `.env.example` asks for (step-by-step, with links) | [docs/CREDENTIALS.md](docs/CREDENTIALS.md) |
 | Set up a local environment + Po registration | [docs/SETUP.md](docs/SETUP.md) |
 | Understand topology / wire contracts / standards | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Run tests | [docs/TESTING.md](docs/TESTING.md) |

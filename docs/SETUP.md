@@ -27,6 +27,8 @@ Copy the template and fill it in:
 cp .env.example .env
 ```
 
+> **Need help finding the values?** [CREDENTIALS.md](CREDENTIALS.md) walks through every variable in `.env.example` step-by-step — where to sign up for each service, where the keys live in the dashboard, what's free, and how to rotate if a secret leaks.
+
 Required:
 
 | Variable | Default | Notes |
