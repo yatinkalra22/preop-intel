@@ -9,7 +9,7 @@
 //      route to displayState='pending-confirmation' (clinician confirms).
 
 import { Injectable, Logger } from '@nestjs/common';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenAI } from '@google/genai';
 import {
   FINDING_CONFIDENCE,
   type ClinicalDocument,
@@ -26,11 +26,11 @@ const SNIPPET_MAX = 300;
 @Injectable()
 export class NoteExtractorService {
   private readonly logger = new Logger(NoteExtractorService.name);
-  private readonly client: Anthropic;
-  private readonly model = process.env.NOTE_EXTRACTOR_MODEL ?? 'claude-sonnet-4-6';
+  private readonly client: GoogleGenAI;
+  private readonly model = process.env.NOTE_EXTRACTOR_MODEL ?? 'gemini-2.5-flash';
 
   constructor() {
-    this.client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? '' });
+    this.client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY ?? '' });
   }
 
   async extract(input: NoteExtractorInput): Promise<NoteExtractorOutput> {
@@ -54,15 +54,17 @@ export class NoteExtractorService {
   private async callExtractor(input: NoteExtractorInput): Promise<RawFinding[]> {
     const prompt = buildExtractionPrompt(input);
 
-    const response = await this.client.messages.create({
+    const response = await this.client.models.generateContent({
       model: this.model,
-      max_tokens: 2000,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: prompt }],
+      contents: prompt,
+      config: {
+        systemInstruction: SYSTEM_PROMPT,
+        maxOutputTokens: 2000,
+        responseMimeType: 'application/json',
+      },
     });
 
-    const text = (response.content[0] as Anthropic.TextBlock).text;
-    return parseFindings(text, this.logger);
+    return parseFindings(response.text ?? '', this.logger);
   }
 
   private verifyAndGate(

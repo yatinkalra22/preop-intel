@@ -1,17 +1,16 @@
-// Claude AI integration for risk synthesis.
+// Gemini AI integration for risk synthesis.
 //
-// Model choice: claude-opus-4-7 for orchestrator synthesis. The orchestrator
+// Model choice: gemini-2.5-pro for orchestrator synthesis. The orchestrator
 // reasons across structured risk scores, extracted findings, override
 // provenance, and critical alerts to produce the final clinical narrative —
-// quality matters more than latency here. ~2-4s typical, acceptable.
-// Note-extractor and action-plan generation use sonnet-4-6 (high volume,
+// quality matters more than latency here.
+// Note-extractor and action-plan generation use gemini-2.5-flash (high volume,
 // latency-sensitive).
-// Source: https://docs.anthropic.com/en/docs/about-claude/models
 //
 // Override via env: ORCHESTRATOR_MODEL.
 
 import { Injectable, Logger } from '@nestjs/common';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenAI } from '@google/genai';
 import type { RcriResult, AriscatResult, ClinicalFinding, FieldOverride } from '@preop-intel/shared';
 import { buildOrchestratorPrompt } from './prompts/orchestrator.prompt';
 
@@ -40,40 +39,37 @@ export interface SynthesisOutput {
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
-  private client: Anthropic;
-  private readonly model = process.env.ORCHESTRATOR_MODEL ?? 'claude-opus-4-7';
+  private readonly client: GoogleGenAI;
+  private readonly model = process.env.ORCHESTRATOR_MODEL ?? 'gemini-2.5-pro';
 
   constructor() {
-    this.client = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY ?? '',
-    });
+    this.client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY ?? '' });
   }
 
   async synthesizeRiskAssessment(params: SynthesisInput): Promise<SynthesisOutput> {
     const prompt = buildOrchestratorPrompt(params);
 
-    const response = await this.client.messages.create({
+    const response = await this.client.models.generateContent({
       model: this.model,
-      max_tokens: 2000,
-      // Why anesthesiologist persona? Gives Claude domain context for
-      // interpreting risk scores and generating clinically appropriate recs.
-      // Why "Output valid JSON only"? Prevents conversational text that breaks parsing.
-      system: `You are a board-certified anesthesiologist performing pre-operative risk assessment.
+      contents: prompt,
+      config: {
+        // Why anesthesiologist persona? Gives the model domain context for
+        // interpreting risk scores and generating clinically appropriate recs.
+        systemInstruction: `You are a board-certified anesthesiologist performing pre-operative risk assessment.
 You have access to the patient's complete medical record. Your job is to synthesize all risk domains
 into a comprehensive, clinically actionable assessment. Be specific, cite exact values, and give
-concrete recommendations with urgency levels. Output valid JSON only.`,
-      messages: [{ role: 'user', content: prompt }],
+concrete recommendations with urgency levels.`,
+        maxOutputTokens: 2000,
+        responseMimeType: 'application/json',
+      },
     });
 
-    const text = (response.content[0] as Anthropic.TextBlock).text;
+    const text = response.text ?? '';
 
     try {
-      // Strip markdown code fences if Claude wraps the JSON
-      const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      return JSON.parse(cleaned) as SynthesisOutput;
+      return JSON.parse(text) as SynthesisOutput;
     } catch (err) {
-      this.logger.error('Failed to parse Claude response as JSON', text);
-      // Fallback: return a safe default
+      this.logger.error('Failed to parse Gemini response as JSON', text);
       return {
         overallRisk: 'Moderate',
         overallRiskPercent: 5,

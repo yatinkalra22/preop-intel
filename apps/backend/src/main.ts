@@ -27,8 +27,8 @@ function validateStartupConfig() {
     if (!process.env.SMART_CALLBACK_URL) missing.push('SMART_CALLBACK_URL');
   }
 
-  if (aiEnabled && !process.env.ANTHROPIC_API_KEY) {
-    missing.push('ANTHROPIC_API_KEY');
+  if (aiEnabled && !process.env.GEMINI_API_KEY) {
+    missing.push('GEMINI_API_KEY');
   }
 
   if (process.env.NODE_ENV === 'production' && process.env.ALLOW_INSECURE_AUTH_BYPASS === 'true') {

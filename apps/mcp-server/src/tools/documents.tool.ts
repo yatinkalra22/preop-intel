@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { FhirClient } from '../fhir/client.js';
+import { resolveFhirContext } from '../fhir/context.js';
 import type { ClinicalDocument } from '@preop-intel/shared';
 
 const DOCUMENT_TYPE_LOINC: Record<string, string> = {
@@ -15,15 +16,16 @@ export function registerDocumentsTool(server: McpServer) {
     'get_clinical_documents',
     'Retrieves clinical notes (DocumentReference + Binary content) for a patient. Returns text + metadata for each document so an extractor agent can derive findings.',
     {
-      patientId: z.string().describe('FHIR Patient resource ID'),
-      fhirBaseUrl: z.string().describe('FHIR server base URL'),
-      accessToken: z.string().describe('SMART on FHIR access token'),
+      patientId: z.string().describe('FHIR Patient resource ID').optional(),
+      fhirBaseUrl: z.string().describe('FHIR server base URL').optional(),
+      accessToken: z.string().describe('SMART on FHIR access token').optional(),
       types: z.array(z.enum(['H&P', 'consult', 'discharge', 'operative']))
         .optional()
         .describe('Filter to specific document types (LOINC). Omit for all types.'),
       limit: z.number().int().min(1).max(50).default(20).describe('Max documents returned'),
     },
-    async ({ patientId, fhirBaseUrl, accessToken, types, limit }) => {
+    async ({ types, limit, ...rest }) => {
+      const { patientId, fhirBaseUrl, accessToken } = resolveFhirContext(rest);
       const fhir = new FhirClient(fhirBaseUrl, accessToken);
 
       const searchParams: Record<string, string> = {

@@ -1,41 +1,56 @@
 # Architecture
 
-PreOp Intel is a multi-agent perioperative risk system structured as a Turborepo monorepo with three deployable apps and a shared types/constants package. This document covers the runtime architecture, agent design, conflict-resolution rules, persistence model, and the standards (FHIR / MCP / A2A / SHARP) the system implements.
+PreOp Intel is a multi-agent perioperative risk system structured as a Turborepo monorepo with four deployable surfaces (frontend, backend API, MCP server, A2A v1 orchestrator) and a shared types/constants package. This document covers the runtime architecture, agent design, conflict-resolution rules, persistence model, and the standards (FHIR / MCP / A2A v1 / SHARP) the system implements.
+
+## Two surfaces, one deterministic core
+
+The system is intentionally split into two execution surfaces that share the same calculators, finding-routing, and FHIR write-back logic:
+
+1. **Standalone frontend** — Next.js → NestJS backend on port 3001. The backend calls Gemini directly and runs the five specialist agents in-process (or as real HTTP when `A2A_MODE=live`). This is the path used by the recorded demo.
+2. **Prompt Opinion BYO agents** — Po-hosted LLM (workspace-configured) → our MCP server on port 3002 (FHIR + calculators + write-back) and our A2A v1 orchestrator on port 3003 (deterministic risk artifact). Po sends FHIR creds in MCP request headers and in A2A `message.metadata`. Authentication via `X-API-Key` on the A2A endpoint.
+
+Both surfaces import the same `packages/shared` types, the same `applyFindingsTo*` reducers, and the same `cancellation.service` deterministic functions.
 
 ## Top-level layout
 
 ```
 preop-intel/
 ├── apps/
-│   ├── frontend/        # Next.js 14 (App Router), Tailwind, shadcn/ui, Zustand
-│   ├── backend/         # NestJS 10 + Lambda adapter
-│   └── mcp-server/      # Standalone MCP server (Express + @modelcontextprotocol/sdk)
+│   ├── frontend/                  # Next.js 14 (App Router), Tailwind, shadcn/ui, Zustand
+│   ├── backend/                   # NestJS 10 + Lambda adapter
+│   │   └── src/
+│   │       ├── modules/...        # frontend-demo path (NestJS API on :3001)
+│   │       └── a2a-v1/            # Po-compatible A2A v1 server (Express on :3003)
+│   └── mcp-server/                # Po-compatible MCP server, streamable-HTTP on :3002/mcp
 ├── packages/
-│   └── shared/          # TypeScript types + constants used by all apps
+│   └── shared/                    # TypeScript types + constants used by all apps
+├── docs/
+│   └── po-agents/                 # Pasteable Po BYO agent prompts (note-extractor, orchestrator, action-plan)
 ├── scripts/
-│   ├── deploy.sh        # AWS Lambda + Vercel deploy orchestrator
-│   ├── setup-ssm.sh     # Provision SSM parameters for secrets
-│   └── seed-meldrx-notes.mjs  # Seed clinical notes to a live FHIR sandbox
-└── docker-compose.yml   # Postgres + Redis for local development
+│   ├── deploy.sh                  # AWS Lambda + Vercel deploy orchestrator
+│   ├── setup-ssm.sh               # Provision SSM parameters for secrets
+│   └── seed-meldrx-notes.mjs      # Seed clinical notes to a live FHIR sandbox
+└── docker-compose.yml             # Postgres + Redis for local development
 ```
 
 ## Runtime topology
 
 ```mermaid
 flowchart LR
-    UI[Next.js Frontend] -->|REST + SSE| API[NestJS API]
-    API -->|HTTP A2A| AG_NX[note-extractor]
-    API -->|HTTP A2A| AG_C[cardiac]
-    API -->|HTTP A2A| AG_P[pulmonary]
-    API -->|HTTP A2A| AG_M[metabolic]
-    AG_NX -->|MCP SSE| MCP[MCP Server]
-    API -->|MCP SSE| MCP
+    subgraph standalone[Standalone surface]
+      UI[Next.js Frontend] -->|REST + SSE| API[NestJS API :3001]
+      API -->|in-process or HTTP A2A| AG[5 specialists in apps/backend/src/modules/a2a]
+      API -->|@google/genai| Gemini[(Gemini API)]
+      API --> PG[(PostgreSQL)]
+      API --> RD[(Redis)]
+    end
+    subgraph po[Prompt Opinion surface]
+      Po[Prompt Opinion BYO agents] -->|MCP streamable-HTTP| MCP[MCP server :3002]
+      Po -->|A2A v1 JSON-RPC + X-API-Key| A2A1[A2A v1 orchestrator :3003]
+    end
+    API -->|MCP streamable-HTTP| MCP
     MCP -->|FHIR R4| FHIR[(FHIR Server / MeldRx)]
-    API -->|Anthropic SDK| Claude[(Claude API)]
-    API --> PG[(PostgreSQL)]
-    API --> RD[(Redis)]
-    AG_NX -->|publishes| Market[Prompt Opinion Marketplace]
-    MCP -->|publishes| Market
+    A2A1 -->|FHIR R4 via MCP / direct| FHIR
 ```
 
 ## Components
@@ -57,15 +72,34 @@ NestJS app, deployed to AWS Lambda via the `serverless-express` adapter. Modules
 - `assessment` — controller + service for `POST /api/assessments/start`, `GET /api/assessments/:id`, `GET /api/assessments/:id/stream` (SSE)
 - `agents` — orchestrator service, note-extractor service, findings routing/application helpers, A2A client
 - `risk` — RCRI + ARISCAT calculators, cancellation risk service
-- `ai` — Anthropic SDK wrapper, orchestrator prompt builder
+- `ai` — Gemini (`@google/genai`) wrapper + the in-repo orchestrator / note-extractor / action-plan prompts. Same prompt text is published to Po as paste-in BYO prompts under `docs/po-agents/`.
 - `fhir` — `fhir-kit-client` wrapper with Redis caching (300s TTL)
 - `auth` — SMART on FHIR OAuth flow
 - `database` — TypeORM, single `AssessmentSession` entity (metadata only, no PHI)
-- `a2a` — agent cards, JSON-RPC-style task envelopes, per-agent HTTP endpoints
+- `a2a` — agent cards + per-agent HTTP endpoints under `/a2a/agents/*` for the standalone-frontend `A2A_MODE=live` recording. This is the **legacy in-repo** A2A surface; the **Po-spec** server lives under `src/a2a-v1/` and is mounted as a separate Express app.
+
+### A2A v1 server (`apps/backend/src/a2a-v1`)
+
+Po-compatible A2A v1 (spec 0.3.0) server. Standalone Express app on `A2A_PORT` (default 3003). Built on `@a2a-js/sdk`:
+
+| File | Role |
+|---|---|
+| `agent-card.ts` | Builds the `AgentCard` returned from `/.well-known/agent-card.json` — `protocolVersion: '0.3.0'`, FHIR-context extension declared in `capabilities.extensions`, `securitySchemes.apiKey`, single skill `assess-preoperative-risk` |
+| `middleware.ts` | `apiKeyMiddleware` — validates `X-API-Key` against `PO_AGENT_API_KEY_PRIMARY`/`SECONDARY`. `/.well-known/agent-card.json` and `/health` bypass auth |
+| `fhir-context.ts` | `extractFhirContext(message)` reads `message.metadata` for any key matching the `fhir-context` extension URI and parses `{fhirUrl, fhirToken, patientId}` |
+| `executor.ts` | `PreOpRiskExecutor implements AgentExecutor` — Zod-validates the input data, runs `calculateRcri` + `calculateAriscat` + `applyFindingsTo*` + `computeCancellationScore` + `computeCostBand` + `derivePreventableIssues`, publishes a `DataPart` artifact + `TextPart` summary back through `ExecutionEventBus` |
+| `app-factory.ts` | Wires `DefaultRequestHandler` + `InMemoryTaskStore` + `PreOpRiskExecutor` and mounts `agentCardHandler`, `apiKeyMiddleware`, `jsonRpcHandler` |
+| `server.ts` | Process entry: reads `A2A_PORT` / `A2A_PUBLIC_URL` / `FHIR_EXTENSION_URI` / `PO_AGENT_REQUIRE_API_KEY` and starts the Express app |
 
 ### MCP server (`apps/mcp-server`)
 
-Standalone Express server using `@modelcontextprotocol/sdk` over SSE transport. Exposes 12 tools:
+Standalone Express server using `@modelcontextprotocol/sdk` v1.29 over **streamable-HTTP** transport (Po's required MCP wire format). Stateless mode (`sessionIdGenerator: undefined`) — each `POST /mcp` builds a fresh server instance. Per-request FHIR context is propagated through Node's `AsyncLocalStorage`:
+
+- The HTTP layer reads `x-fhir-server-url`, `x-fhir-access-token`, `x-patient-id` from the request headers.
+- Each tool calls `resolveFhirContext(args)` — explicit args win, header-derived context fills gaps, missing values throw a clear error.
+- `GET /mcp` and `DELETE /mcp` return 405 (stateless server has no resumable session).
+
+Exposes 12 tools:
 
 | # | Tool | Purpose |
 |---|---|---|
@@ -102,7 +136,7 @@ sequenceDiagram
     participant Orch as Orchestrator
     participant NX as note-extractor
     participant Spec as Cardiac/Pulmonary/Metabolic
-    participant Claude
+    participant LLM
 
     UI->>API: POST /assessments/start
     API->>Orch: runAssessment()
@@ -113,14 +147,14 @@ sequenceDiagram
       Orch->>API: medications
     end
     Orch->>NX: A2A invoke (documents)
-    NX->>Claude: extract findings (strict JSON)
+    NX->>LLM: extract findings (strict JSON)
     NX-->>Orch: verified findings
     par specialists in parallel
       Orch->>Spec: A2A invoke (structured + routed findings)
       Spec-->>Orch: adjusted inputs + overrides + critical alerts
     end
-    Orch->>Claude: synthesize (RCRI + ARISCAT + findings + alerts)
-    Claude-->>Orch: clinical narrative + recommendations
+    Orch->>LLM: synthesize (RCRI + ARISCAT + findings + alerts)
+    LLM-->>Orch: clinical narrative + recommendations
     Orch->>Orch: compute cancellation risk (deterministic + AI plan)
     Orch-->>API: AssessmentResult
     API-->>UI: SSE updates throughout
@@ -181,11 +215,14 @@ Write: `RiskAssessment`, `CarePlan`, `Goal`, `Flag`, `ServiceRequest`. All write
 
 ### MCP (Model Context Protocol)
 
-Standalone server using `@modelcontextprotocol/sdk` over SSE transport. Publishable to Prompt Opinion's marketplace.
+Standalone server using `@modelcontextprotocol/sdk` v1.29 over **streamable-HTTP** (Po's required transport). FHIR context propagates per-request via `AsyncLocalStorage` from `x-fhir-server-url` / `x-fhir-access-token` / `x-patient-id` headers, so the same MCP server handles many tenants concurrently. Connectable as a Po MCP tool source.
 
 ### A2A (Agent-to-Agent)
 
-Minimal sync surface: agent cards at `/.well-known/agent.json`, JSON-RPC-style task envelopes at `/{name}/tasks`. The `A2AClient` makes real HTTP calls between agents when `A2A_MODE=live` (default `local` for deterministic demo recording). All five agents are individually publishable to Prompt Opinion.
+Two surfaces:
+
+1. **A2A v1 (Po-compatible, spec 0.3.0)** — `apps/backend/src/a2a-v1`. Single agent `preop_intel_orchestrator` exposing one skill `assess-preoperative-risk`. `AgentCard` at `/.well-known/agent-card.json`, JSON-RPC `POST /` for `message/send`. Authenticates with `X-API-Key`. FHIR context flows in `message.metadata` under the URI declared in `capabilities.extensions`. Returns a deterministic `DataPart` artifact (RCRI + ARISCAT + cancellation cost band + preventable issues + critical alerts).
+2. **Legacy internal A2A (frontend demo only)** — `apps/backend/src/modules/a2a`. Five specialist agent cards at `/a2a/agents/{name}/.well-known/agent.json`, JSON-RPC-style task envelopes at `/a2a/agents/{name}/tasks`. Used by `A2AClient` when `A2A_MODE=live` so the recorded demo shows real HTTP traffic between agents in DevTools. Not exposed to Po — Po talks to the v1 server only.
 
 ### SHARP Extension Specs
 
@@ -214,9 +251,9 @@ SMART on FHIR OAuth 2.0. Required for EHR-embedded apps (Epic App Orchard, Cerne
 |---|---|---|
 | `A2A_MODE` | backend env | `local` (default) → in-process; `live` → HTTP between agents |
 | `A2A_BASE_URL` | backend env | Base URL the A2A client uses; defaults to `http://localhost:${PORT}` |
-| `ORCHESTRATOR_MODEL` | backend env | Override orchestrator model (default `claude-opus-4-7`) |
-| `NOTE_EXTRACTOR_MODEL` | backend env | Override extractor model (default `claude-sonnet-4-6`) |
-| `ACTION_PLAN_MODEL` | backend env | Override cancellation-action-plan model (default `claude-sonnet-4-6`) |
+| `ORCHESTRATOR_MODEL` | backend env | Override orchestrator model (default `gemini-2.5-pro`) |
+| `NOTE_EXTRACTOR_MODEL` | backend env | Override extractor model (default `gemini-2.5-flash`) |
+| `ACTION_PLAN_MODEL` | backend env | Override cancellation-action-plan model (default `gemini-2.5-flash`) |
 
 See [SETUP.md](SETUP.md) for the full env var inventory.
 

@@ -13,8 +13,8 @@ PreOp Intel reads what doctors actually wrote. Five A2A agents extract risk-rele
 | Standard | How We Use It |
 |----------|---------------|
 | **FHIR R4** | Read `Patient`, `Condition`, `Observation`, `MedicationRequest`, `DocumentReference`, `Binary`. Write `RiskAssessment`, `CarePlan`, `Goal`, `Flag`, `ServiceRequest` back to the chart so downstream systems can consume them. |
-| **MCP (Model Context Protocol)** | Standalone server publishing 12 tools — FHIR readers, RCRI/ARISCAT calculators, FHIR write-back, and `get_clinical_documents`. SSE transport, Lambda-deployable, registerable on Prompt Opinion's marketplace. |
-| **A2A (Agent-to-Agent)** | Five agents (`note-extractor`, `cardiac`, `pulmonary`, `metabolic`, `orchestrator`) registered with agent cards at `/.well-known/agent.json`. Set `A2A_MODE=live` to see real HTTP traffic between agents in DevTools. |
+| **MCP (Model Context Protocol)** | Standalone server (streamable-HTTP transport) publishing 12 tools — FHIR readers, RCRI/ARISCAT calculators, FHIR write-back, and `get_clinical_documents`. Per-request FHIR creds via `x-fhir-server-url` / `x-fhir-access-token` / `x-patient-id` headers, propagated through `AsyncLocalStorage`. Connectable as an MCP tool source on Prompt Opinion. |
+| **A2A v1 (Agent-to-Agent, spec 0.3.0)** | Po-compatible orchestrator at `/.well-known/agent-card.json` + JSON-RPC `POST /` `message/send`. Returns a deterministic risk artifact (RCRI + ARISCAT + cancellation cost band + preventable issues + critical alerts). FHIR context flows through `message.metadata` under the `fhir-context` extension URI. Authenticated via `X-API-Key`. The internal demo also exposes 5 specialist agents via the legacy `/a2a/agents/*` interface used by `A2A_MODE=live` for the standalone frontend recording. |
 | **SHARP Extension Specs** | `sharp-context-source`, `sharp-evidence-link`, `sharp-confidence` extensions on every FHIR write-back resource. Downstream systems can trace any recommendation back to the verbatim note text that justified it. |
 | **SMART on FHIR** | OAuth 2.0 launch context for EHR-embedded use. SessionStorage-only token handling — no PHI persisted in the app DB. |
 
@@ -27,7 +27,7 @@ Read FHIR → Extract findings → Apply to specialists → Synthesize → Write
 1. **Read FHIR** — Orchestrator pulls structured cardiac / pulmonary / metabolic / medication data and clinical documents in parallel via the MCP server.
 2. **Extract findings** — `note-extractor` agent runs strict-citation LLM extraction over the documents, then a deterministic verifier (`String.prototype.includes`) drops any finding whose snippet doesn't appear verbatim in the source. Confidence gating routes low-confidence findings off-screen.
 3. **Apply to specialists** — Findings are routed by category to cardiac / pulmonary / metabolic specialists (real A2A protocol when `A2A_MODE=live`). Each specialist combines structured data with note findings and may upgrade its inputs (e.g., a recent-MI finding flips RCRI's IHD criterion). Medication-status conflicts always require explicit clinician confirmation.
-4. **Synthesize** — Orchestrator (Claude Opus 4.7) reasons across RCRI, ARISCAT, metabolic flags, all findings, override provenance, and critical alerts. Computes deterministic same-day-cancellation score and dollar-band cost avoidance.
+4. **Synthesize** — Orchestrator (Gemini 2.5 Pro on the standalone frontend path; Po-workspace LLM on the Po path) reasons across RCRI, ARISCAT, metabolic flags, all findings, override provenance, and critical alerts. Computes deterministic same-day-cancellation score and dollar-band cost avoidance.
 5. **Write FHIR back** — `RiskAssessment`, `CarePlan` + `Goal`, `Flag`, `ServiceRequest` resources written to the chart, each carrying SHARP extensions pointing to the source documents.
 
 ## Stack
@@ -36,13 +36,15 @@ Read FHIR → Extract findings → Apply to specialists → Synthesize → Write
 |-------|------------|
 | Frontend | Next.js 14 App Router, Tailwind CSS, shadcn/ui, Zustand, TanStack Query |
 | Backend | NestJS 10, TypeScript, `serverless-express` Lambda adapter |
-| MCP server | Express + `@modelcontextprotocol/sdk` over SSE |
-| AI | Claude Opus 4.7 (orchestrator) + Claude Sonnet 4.6 (note extractor, action plan) |
-| Standards | FHIR R4, MCP, A2A, SHARP, SMART on FHIR |
+| MCP server | Express + `@modelcontextprotocol/sdk` v1.29 streamable-HTTP transport |
+| A2A v1 server | Express + `@a2a-js/sdk` v0.3 (`DefaultRequestHandler`, `InMemoryTaskStore`, `agentCardHandler`, `jsonRpcHandler`) |
+| AI (frontend demo) | Google `@google/genai` v2 — Gemini 2.5 Pro (orchestrator) + Gemini 2.5 Flash (note extractor, action plan) |
+| AI (Po path) | Whatever LLM the user has configured in their Po workspace — Po BYO model. Prompts paste in from `docs/po-agents/` |
+| Standards | FHIR R4, MCP, A2A v1 (spec 0.3.0), SHARP, SMART on FHIR |
 | Database | PostgreSQL (metadata only — no PHI) |
 | Cache | Redis (300s TTL on FHIR responses) |
 | Monorepo | Turborepo, npm workspaces |
-| Deploy | AWS Lambda (backend + MCP) + Vercel (frontend) |
+| Deploy | AWS Lambda (backend + MCP + A2A v1) + Vercel (frontend) |
 
 ## Features
 
@@ -61,7 +63,7 @@ Read FHIR → Extract findings → Apply to specialists → Synthesize → Write
 ## Quick Start
 
 ```bash
-# Prerequisites: Node.js 20+, Docker, Anthropic API key
+# Prerequisites: Node.js 20+, Docker, Gemini API key (free at https://aistudio.google.com)
 git clone <repo-url>
 cd preop-intel
 
@@ -70,7 +72,7 @@ npm install
 
 # Configure environment
 cp .env.example .env
-# Set ANTHROPIC_API_KEY at minimum; FHIR vars only needed for live mode
+# Set GEMINI_API_KEY at minimum (free key from https://aistudio.google.com); FHIR vars only needed for live mode
 
 # Start Postgres + Redis
 docker-compose up -d
@@ -78,26 +80,40 @@ docker-compose up -d
 # Build everything
 npm run build
 
-# Start all three apps
+# Start all four surfaces (frontend + backend API + MCP + A2A v1)
 npm run dev
-# Frontend:   http://localhost:3000
-# Backend:    http://localhost:3001
-# MCP server: http://localhost:3002
+# Frontend:                       http://localhost:3000
+# Backend API (frontend demo):    http://localhost:3001
+# MCP server (Po-compatible):     http://localhost:3002/mcp
+# A2A v1 orchestrator (Po):       http://localhost:3003 (card at /.well-known/agent-card.json)
 ```
 
-Open the dashboard, click into Robert Chen, click **Start Assessment**.
+Open the dashboard, click into Robert Chen, click **Start Assessment** for the standalone demo flow.
+
+To run from inside Prompt Opinion: register the MCP server URL + the A2A agent card, paste the system prompts from `docs/po-agents/` into three BYO agents, and Po will drive the same deterministic risk core.
 
 For full setup, environment variables, and live-mode wiring, see [docs/SETUP.md](docs/SETUP.md).
+
+## Two surfaces, one core
+
+PreOp Intel runs the same deterministic risk core (RCRI / ARISCAT / cancellation model / SHARP-tagged FHIR write-back) behind two surfaces:
+
+| Surface | Who drives | What runs |
+|---|---|---|
+| Standalone frontend (`/api/assessments/start`) | The Next.js UI | Backend on port 3001 calls Gemini directly + the in-process specialist `/a2a/agents/*` (or `A2A_MODE=live` for visible HTTP traffic) |
+| Prompt Opinion BYO agents | Po (using the workspace LLM the user configured) | Po BYO agent prompts call our **MCP server** (port 3002) and our **A2A v1 orchestrator** (port 3003) — both Po-protocol-native |
+
+Same prompts (`docs/po-agents/*.system.md` for Po, `apps/backend/src/modules/ai/*` for the standalone path), same calculators, same write-backs.
 
 ## Pre-Demo Checklist
 
 Use this before recording the demo or running it for judges.
 
-- ✓ `ANTHROPIC_API_KEY` set in `.env`
+- ✓ `GEMINI_API_KEY` set in `.env`
 - ✓ `A2A_MODE=local` for deterministic recording (set `live` only for live judging)
 - ✓ Postgres + Redis running (`docker-compose ps` shows both up)
 - ✓ All 33 backend tests pass (`cd apps/backend && node --test test/*.test.mjs`)
-- ✓ Live LLM smoke test passes (`ANTHROPIC_API_KEY=… node test/note-extractor.live.mjs`) — confirms 3 findings + verifier
+- ✓ Live LLM smoke test passes (`GEMINI_API_KEY=… node test/note-extractor.live.mjs`) — confirms 3 findings + verifier
 - ✓ Frontend build succeeds (`cd apps/frontend && npm run build`)
 - ✓ Robert Chen demo run produces 3 findings, escalates to "Very High", shows $6,400–$10,800 band
 - ✓ FHIR JSON viewer expandable to show SHARP extensions
@@ -121,7 +137,7 @@ preop-intel/
 │   │   └── src/modules/
 │   │       ├── a2a/                 # Agent cards, controller, client
 │   │       ├── agents/              # Orchestrator, note-extractor, findings application
-│   │       ├── ai/                  # Claude wrapper + orchestrator prompt
+│   │       ├── ai/                  # Gemini wrapper + orchestrator/extractor/action-plan prompts (mirrored in docs/po-agents/)
 │   │       ├── assessment/          # POST /assessments/start, SSE stream
 │   │       ├── auth/                # SMART on FHIR OAuth
 │   │       ├── database/            # TypeORM (AssessmentSession only)

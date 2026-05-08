@@ -87,7 +87,7 @@ Exercises the full extraction pipeline against `DEMO_NOTES`:
 
 ```bash
 cd apps/backend
-ANTHROPIC_API_KEY=sk-... node test/note-extractor.live.mjs
+GEMINI_API_KEY=... node test/note-extractor.live.mjs
 ```
 
 Asserts:
@@ -96,7 +96,7 @@ Asserts:
 - All findings have `verifiedSnippet === true`
 - Categories include `medication`, `functional`, and `cardiac-event` (the 3 wedge findings)
 
-Cost: ~$0.01 per run on `claude-sonnet-4-6`.
+Cost: free on `gemini-2.5-flash` within Google AI Studio's daily quota.
 
 ## Running a single suite
 

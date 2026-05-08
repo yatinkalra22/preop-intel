@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { FhirClient } from '../fhir/client.js';
+import { resolveFhirContext } from '../fhir/context.js';
 import { LOINC, METABOLIC_THRESHOLDS } from '@preop-intel/shared';
 
 /**
@@ -15,11 +16,12 @@ export function registerMetabolicTool(server: McpServer) {
     'get_metabolic_risk_data',
     'Retrieves HbA1c, eGFR, BMI, and creatinine from FHIR for metabolic risk assessment',
     {
-      patientId: z.string(),
-      fhirBaseUrl: z.string(),
-      accessToken: z.string(),
+      patientId: z.string().optional(),
+      fhirBaseUrl: z.string().optional(),
+      accessToken: z.string().optional(),
     },
-    async ({ patientId, fhirBaseUrl, accessToken }) => {
+    async (args) => {
+      const { patientId, fhirBaseUrl, accessToken } = resolveFhirContext(args);
       const fhir = new FhirClient(fhirBaseUrl, accessToken);
 
       const [hba1c, egfr, bmi, creatinine] = await Promise.all([

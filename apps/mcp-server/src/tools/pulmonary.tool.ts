@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { FhirClient } from '../fhir/client.js';
+import { resolveFhirContext } from '../fhir/context.js';
 import { LOINC, ICD10_RESPIRATORY_INFECTION } from '@preop-intel/shared';
 
 /**
@@ -15,11 +16,12 @@ export function registerPulmonaryTool(server: McpServer) {
     'get_pulmonary_risk_data',
     'Retrieves FHIR data for ARISCAT pulmonary complication risk calculation',
     {
-      patientId: z.string(),
-      fhirBaseUrl: z.string(),
-      accessToken: z.string(),
+      patientId: z.string().optional(),
+      fhirBaseUrl: z.string().optional(),
+      accessToken: z.string().optional(),
     },
-    async ({ patientId, fhirBaseUrl, accessToken }) => {
+    async (args) => {
+      const { patientId, fhirBaseUrl, accessToken } = resolveFhirContext(args);
       const fhir = new FhirClient(fhirBaseUrl, accessToken);
 
       // All 4 queries are independent — run in parallel

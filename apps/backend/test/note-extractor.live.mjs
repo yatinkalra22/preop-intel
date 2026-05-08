@@ -1,8 +1,8 @@
 // Live extractor smoke test — exercises the full LLM pipeline against
 // the 3 hand-crafted Robert Chen demo notes.
 //
-// Requires: ANTHROPIC_API_KEY in env.
-// Run with:  ANTHROPIC_API_KEY=sk-... node apps/backend/test/note-extractor.live.mjs
+// Requires: GEMINI_API_KEY in env.
+// Run with:  GEMINI_API_KEY=... node apps/backend/test/note-extractor.live.mjs
 //
 // Asserts:
 //   - At least 3 findings extracted
@@ -12,15 +12,15 @@
 import { NoteExtractorService } from '../dist/modules/agents/note-extractor.service.js';
 import { DEMO_NOTES } from '@preop-intel/shared';
 
-if (!process.env.ANTHROPIC_API_KEY) {
-  console.error('ERROR: ANTHROPIC_API_KEY not set in env');
+if (!process.env.GEMINI_API_KEY) {
+  console.error('ERROR: GEMINI_API_KEY not set in env');
   process.exit(1);
 }
 
 const service = new NoteExtractorService();
 
 console.log(`\nRunning note-extractor against ${DEMO_NOTES.length} demo notes...`);
-console.log(`Model: ${process.env.NOTE_EXTRACTOR_MODEL ?? 'claude-sonnet-4-6 (default)'}\n`);
+console.log(`Model: ${process.env.NOTE_EXTRACTOR_MODEL ?? 'gemini-2.5-flash (default)'}\n`);
 
 const result = await service.extract({
   documents: DEMO_NOTES,

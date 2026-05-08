@@ -7,7 +7,7 @@
 // be audited from a single place. Citations in cancellation.types.ts header.
 
 import { Injectable, Logger } from '@nestjs/common';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenAI } from '@google/genai';
 import {
   SEVERITY_COST_CONTRIBUTION,
   SEVERITY_SCORE_WEIGHT,
@@ -22,11 +22,11 @@ import {
 @Injectable()
 export class CancellationService {
   private readonly logger = new Logger(CancellationService.name);
-  private readonly client: Anthropic;
-  private readonly model = process.env.ACTION_PLAN_MODEL ?? 'claude-sonnet-4-6';
+  private readonly client: GoogleGenAI;
+  private readonly model = process.env.ACTION_PLAN_MODEL ?? 'gemini-2.5-flash';
 
   constructor() {
-    this.client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? '' });
+    this.client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY ?? '' });
   }
 
   async assess(input: CancellationScoreInput & { plannedProcedureLabel: string }): Promise<CancellationRisk> {
@@ -74,13 +74,15 @@ export class CancellationService {
     findings: ClinicalFinding[];
   }): Promise<string> {
     const prompt = buildActionPlanPrompt(params);
-    const response = await this.client.messages.create({
+    const response = await this.client.models.generateContent({
       model: this.model,
-      max_tokens: 800,
-      system: ACTION_PLAN_SYSTEM,
-      messages: [{ role: 'user', content: prompt }],
+      contents: prompt,
+      config: {
+        systemInstruction: ACTION_PLAN_SYSTEM,
+        maxOutputTokens: 800,
+      },
     });
-    return (response.content[0] as Anthropic.TextBlock).text.trim();
+    return (response.text ?? '').trim();
   }
 }
 

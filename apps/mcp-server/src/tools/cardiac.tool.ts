@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { FhirClient } from '../fhir/client.js';
+import { resolveFhirContext } from '../fhir/context.js';
 import { LOINC, ICD10_RCRI } from '@preop-intel/shared';
 
 /**
@@ -15,11 +16,12 @@ export function registerCardiacTool(server: McpServer) {
     'get_cardiac_risk_data',
     'Retrieves all FHIR data needed to calculate the Revised Cardiac Risk Index (RCRI)',
     {
-      patientId: z.string(),
-      fhirBaseUrl: z.string(),
-      accessToken: z.string(),
+      patientId: z.string().optional(),
+      fhirBaseUrl: z.string().optional(),
+      accessToken: z.string().optional(),
     },
-    async ({ patientId, fhirBaseUrl, accessToken }) => {
+    async (args) => {
+      const { patientId, fhirBaseUrl, accessToken } = resolveFhirContext(args);
       const fhir = new FhirClient(fhirBaseUrl, accessToken);
 
       // Parallel FHIR queries — conditions and creatinine are independent

@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { FhirClient } from '../fhir/client.js';
+import { resolveFhirContext } from '../fhir/context.js';
 
 /**
  * get_patient_surgical_data
@@ -13,11 +14,12 @@ export function registerPatientTool(server: McpServer) {
     'get_patient_surgical_data',
     'Retrieves patient demographics and surgical history from FHIR',
     {
-      patientId: z.string().describe('FHIR Patient resource ID'),
-      fhirBaseUrl: z.string().describe('FHIR server base URL'),
-      accessToken: z.string().describe('SMART on FHIR access token'),
+      patientId: z.string().describe('FHIR Patient resource ID').optional(),
+      fhirBaseUrl: z.string().describe('FHIR server base URL').optional(),
+      accessToken: z.string().describe('SMART on FHIR access token').optional(),
     },
-    async ({ patientId, fhirBaseUrl, accessToken }) => {
+    async (args) => {
+      const { patientId, fhirBaseUrl, accessToken } = resolveFhirContext(args);
       const fhir = new FhirClient(fhirBaseUrl, accessToken);
 
       const [patient, procedures] = await Promise.all([

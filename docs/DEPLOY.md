@@ -14,7 +14,8 @@ This split is intentional: NestJS needs VPC access (RDS, ElastiCache) and a 30s 
 - AWS CLI configured (`aws configure`)
 - Vercel account + Vercel CLI (`npm i -g vercel`)
 - Provisioned RDS Postgres instance and ElastiCache Redis cluster (free tier `db.t3.micro` / `cache.t3.micro` is sufficient)
-- Anthropic API key
+- Gemini API key (free at https://aistudio.google.com) — required for the standalone frontend demo path
+- Random secret for `PO_AGENT_API_KEY_PRIMARY` — required if Po will drive the A2A v1 server
 - MeldRx workspace credentials (if running live FHIR mode)
 
 ## 1. Provision SSM parameters
@@ -33,7 +34,7 @@ It prompts for each value and writes parameters under `/preop-intel/<stage>/`:
 |---|---|
 | `/preop-intel/<stage>/DATABASE_URL` | RDS connection string |
 | `/preop-intel/<stage>/REDIS_URL` | ElastiCache endpoint |
-| `/preop-intel/<stage>/ANTHROPIC_API_KEY` | Anthropic dashboard |
+| `/preop-intel/<stage>/GEMINI_API_KEY` | Google AI Studio (https://aistudio.google.com) |
 | `/preop-intel/<stage>/FHIR_BASE_URL` | MeldRx workspace URL |
 | `/preop-intel/<stage>/FHIR_CLIENT_ID` | MeldRx app credentials |
 | `/preop-intel/<stage>/FHIR_CLIENT_SECRET` | MeldRx app credentials |
@@ -141,8 +142,8 @@ Free tier covers most of the stack. Operational cost on a quiet account:
 | API Gateway (~50 req/day) | < $0.05 |
 | SSM Parameter Store | $0 |
 | Vercel Hobby | $0 |
-| Anthropic API (~50 assessments) | ~$0.50 |
-| **Total** | **~$0.65/month** |
+| Gemini API (~50 assessments, 2.5 Pro + Flash) | < $0.20 (free tier covers it) |
+| **Total** | **~$0.35/month** |
 
 ## Rollback
 

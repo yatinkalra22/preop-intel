@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { FhirClient } from '../fhir/client.js';
+import { resolveFhirContext } from '../fhir/context.js';
 import { RiskAssessmentBuilder } from '../builders/risk-assessment.builder.js';
 import { CarePlanBuilder } from '../builders/care-plan.builder.js';
 import { SNOMED_SPECIALTIES, buildSharpExtensions, type SharpContext } from '@preop-intel/shared';
@@ -32,7 +33,7 @@ export function registerWriteTools(server: McpServer) {
     'create_risk_assessment',
     'Writes a structured FHIR RiskAssessment resource to the patient chart',
     {
-      patientId: z.string(),
+      patientId: z.string().optional(),
       rcriScore: z.number(),
       rcriRiskPercent: z.number(),
       ariscatScore: z.number(),
@@ -44,15 +45,17 @@ export function registerWriteTools(server: McpServer) {
         urgency: z.string(),
         rationale: z.string(),
       })),
-      fhirBaseUrl: z.string(),
-      accessToken: z.string(),
+      fhirBaseUrl: z.string().optional(),
+      accessToken: z.string().optional(),
       plannedProcedure: z.string(),
       sharpContext: sharpContextSchema,
     },
     async (input) => {
-      const fhir = new FhirClient(input.fhirBaseUrl, input.accessToken);
+      const ctx = resolveFhirContext(input);
+      const fhir = new FhirClient(ctx.fhirBaseUrl, ctx.accessToken);
       const resource = RiskAssessmentBuilder.build({
         ...input,
+        patientId: ctx.patientId,
         sharpContext: input.sharpContext as SharpContext | undefined,
       });
       const created = await fhir.create('RiskAssessment', resource);
@@ -78,21 +81,23 @@ export function registerWriteTools(server: McpServer) {
     'create_care_plan',
     'Writes a pre-operative optimization CarePlan with Goals to the patient chart',
     {
-      patientId: z.string(),
+      patientId: z.string().optional(),
       goals: z.array(z.object({
         description: z.string(),
         target: z.string(),
         timeframe: z.string(),
       })),
       activities: z.array(z.string()),
-      fhirBaseUrl: z.string(),
-      accessToken: z.string(),
+      fhirBaseUrl: z.string().optional(),
+      accessToken: z.string().optional(),
       sharpContext: sharpContextSchema,
     },
     async (input) => {
-      const fhir = new FhirClient(input.fhirBaseUrl, input.accessToken);
+      const ctx = resolveFhirContext(input);
+      const fhir = new FhirClient(ctx.fhirBaseUrl, ctx.accessToken);
       const { carePlan, goals } = CarePlanBuilder.build({
         ...input,
+        patientId: ctx.patientId,
         sharpContext: input.sharpContext as SharpContext | undefined,
       });
 
@@ -122,14 +127,15 @@ export function registerWriteTools(server: McpServer) {
     'create_flag',
     'Creates a high-risk Flag on the patient record visible to the care team',
     {
-      patientId: z.string(),
+      patientId: z.string().optional(),
       riskLevel: z.enum(['High', 'Very High']),
       summary: z.string(),
-      fhirBaseUrl: z.string(),
-      accessToken: z.string(),
+      fhirBaseUrl: z.string().optional(),
+      accessToken: z.string().optional(),
       sharpContext: sharpContextSchema,
     },
-    async ({ patientId, riskLevel, summary, fhirBaseUrl, accessToken, sharpContext }) => {
+    async ({ riskLevel, summary, sharpContext, ...rest }) => {
+      const { patientId, fhirBaseUrl, accessToken } = resolveFhirContext(rest);
       const fhir = new FhirClient(fhirBaseUrl, accessToken);
       const sharpExt = buildSharpExtensions(sharpContext as SharpContext | undefined);
       const flag = {
@@ -164,15 +170,16 @@ export function registerWriteTools(server: McpServer) {
     'create_service_request',
     'Creates a specialist referral ServiceRequest (cardiology, endocrinology, pulmonology, nephrology)',
     {
-      patientId: z.string(),
+      patientId: z.string().optional(),
       specialty: z.enum(['cardiology', 'endocrinology', 'pulmonology', 'nephrology']),
       indication: z.string(),
       urgency: z.enum(['routine', 'urgent', 'asap', 'stat']),
-      fhirBaseUrl: z.string(),
-      accessToken: z.string(),
+      fhirBaseUrl: z.string().optional(),
+      accessToken: z.string().optional(),
       sharpContext: sharpContextSchema,
     },
-    async ({ patientId, specialty, indication, urgency, fhirBaseUrl, accessToken, sharpContext }) => {
+    async ({ specialty, indication, urgency, sharpContext, ...rest }) => {
+      const { patientId, fhirBaseUrl, accessToken } = resolveFhirContext(rest);
       const fhir = new FhirClient(fhirBaseUrl, accessToken);
       const snomed = SNOMED_SPECIALTIES[specialty];
       const sharpExt = buildSharpExtensions(sharpContext as SharpContext | undefined);
